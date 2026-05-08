@@ -88,7 +88,20 @@ export const maybeRespawn = (player: ServerPlayer, now: number): void => {
     player.reloadDoneAt = null;
     player.grounded = true;
     player.lastIntegratedAt = now;
+    player.lastDamagedAt = 0;
   }
+};
+
+// Out-of-combat health regen (CoD/Halo style). Runs every tick; only heals
+// after `regenDelayMs` of no damage. Heals at `regenPerSec` and clamps at max.
+export const regenHealth = (player: ServerPlayer, now: number): void => {
+  if (!player.alive) return;
+  if (player.health >= PLAYER.maxHealth) return;
+  if (now - player.lastDamagedAt < PLAYER.regenDelayMs) return;
+  player.health = Math.min(
+    PLAYER.maxHealth,
+    player.health + PLAYER.regenPerSec * (TICK_MS / 1000),
+  );
 };
 
 export const tryFire = (
@@ -139,6 +152,7 @@ export const tryFire = (
     const victim = others.find((p) => p.id === effectiveHit.hitId);
     if (victim && victim.alive) {
       victim.health -= WEAPON.damage;
+      victim.lastDamagedAt = now;
       if (victim.health <= 0) {
         victim.health = 0;
         victim.alive = false;

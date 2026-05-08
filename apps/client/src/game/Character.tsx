@@ -61,6 +61,8 @@ useGLTF.preload(MODEL_URL);
 
 interface Props {
   velocity: Vec3;
+  yaw: number;
+  reloading: boolean;
   alive: boolean;
   playerId: PlayerId | null;
 }
@@ -78,32 +80,72 @@ const JUMP_POSE_TIME = 0.35;
 // this slightly less so the next shot can re-trigger smoothly.
 const FIRE_HOLD_MS = 350;
 
-type ClipKey = 'Idle' | 'Walk' | 'Run' | 'Jump' | 'Fire';
+// Muzzle flash visibility duration per shot (ms). Flash is meant to "pop" —
+// shorter than FIRE_HOLD_MS, which spans the firing animation.
+const MUZZLE_FLASH_MS = 55;
+
+type Dir = 'F' | 'FR' | 'R' | 'BR' | 'B' | 'BL' | 'L' | 'FL';
+type ClipKey =
+  | 'Idle'
+  | 'Jump'
+  | 'Fire'
+  | 'FireWalk'
+  | 'Reload'
+  | 'ReloadWalk'
+  | `Walk${Dir}`
+  | `Run${Dir}`;
 
 // Map ClipKey -> the actual clip name in the GLB. `null` means "no clip
-// available, skip transitions to this state". Most Mixamo character packs
-// will need only the Fire entry filled in.
+// available, skip transitions to this state".
 const CLIP_NAMES: Record<ClipKey, string | null> = {
   Idle: 'Idle',
-  Walk: 'Walk',
-  Run: 'Run',
-  Jump: 'Run', // re-uses Run frozen mid-stride; replace with 'Jump' when a real clip lands
+  Jump: 'RunF', // re-uses sprint-forward frozen mid-stride; replace with a real Jump clip later
   Fire: 'Fire',
+  FireWalk: 'FireWalk',
+  Reload: 'Reload',
+  ReloadWalk: 'ReloadWalk',
+  WalkF: 'WalkF',
+  WalkFR: 'WalkFR',
+  WalkR: 'WalkR',
+  WalkBR: 'WalkBR',
+  WalkB: 'WalkB',
+  WalkBL: 'WalkBL',
+  WalkL: 'WalkL',
+  WalkFL: 'WalkFL',
+  RunF: 'RunF',
+  RunFR: 'RunFR',
+  RunR: 'RunR',
+  RunBR: 'RunBR',
+  RunB: 'RunB',
+  RunBL: 'RunBL',
+  RunL: 'RunL',
+  RunFL: 'RunFL',
 };
 
-// Per-clip playback speed multiplier. Mixamo's stock Walk/Run clips animate
-// the legs slower than the world-space speed at our walkSpeed/sprintSpeed,
-// so the feet appear to slide. Doubling the playback rate roughly matches
-// the cycle to actual ground speed.
+// Per-clip playback speed multiplier. Mixamo's stock locomotion clips animate
+// at their own pace, slower than our walkSpeed/sprintSpeed in world space, so
+// doubling the playback rate roughly matches the cycle to actual ground speed.
 const CLIP_TIMESCALE: Record<ClipKey, number> = {
   Idle: 1,
-  Walk: 2,
-  Run: 2,
   Jump: 0, // unused (Jump path freezes the action)
   Fire: 1,
+  FireWalk: 1,
+  Reload: 1,
+  ReloadWalk: 1,
+  WalkF: 2, WalkFR: 2, WalkR: 2, WalkBR: 2, WalkB: 2, WalkBL: 2, WalkL: 2, WalkFL: 2,
+  RunF: 1, RunFR: 1, RunR: 1, RunBR: 1, RunB: 1, RunBL: 1, RunL: 1, RunFL: 1,
 };
 
-export const Character = ({ velocity, alive, playerId }: Props) => {
+// Snap (localForward, localRight) to one of 8 cardinal/diagonal directions.
+// theta is measured from the forward axis, positive toward the right.
+const DIRS_BY_OCTANT: readonly Dir[] = ['F', 'FR', 'R', 'BR', 'B', 'BL', 'L', 'FL'];
+const directionFromVelocity = (lf: number, lr: number): Dir => {
+  const theta = Math.atan2(lr, lf);
+  const idx = ((Math.round(theta / (Math.PI / 4)) % 8) + 8) % 8;
+  return DIRS_BY_OCTANT[idx]!;
+};
+
+export const Character = ({ velocity, yaw, reloading, alive, playerId }: Props) => {
   const gltf = useGLTF(MODEL_URL);
   const cloned = useMemo(() => SkeletonUtils.clone(gltf.scene), [gltf.scene]);
   // Mixamo animations carry root motion in the Hips bone's position track —
@@ -120,8 +162,7 @@ export const Character = ({ velocity, alive, playerId }: Props) => {
   const [firing, setFiring] = useState(false);
   const fireTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seenEventsRef = useRef(0);
-
-  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const muzzleFlashUntilRef = useRef(0);
 
   useEffect(() => {
     return useGame.subscribe((state) => {
@@ -134,21 +175,10 @@ export const Character = ({ velocity, alive, playerId }: Props) => {
         if (ev.type === 'shot' && ev.shooterId === playerId) firedThisBatch = true;
       }
       if (!firedThisBatch) return;
-
       setFiring(true);
+      muzzleFlashUntilRef.current = performance.now() + MUZZLE_FLASH_MS;
       if (fireTimeoutRef.current) clearTimeout(fireTimeoutRef.current);
       fireTimeoutRef.current = setTimeout(() => setFiring(false), FIRE_HOLD_MS);
-
-      // Pop the muzzle flash at the barrel tip.
-      const gun = gunMeshRef.current;
-      const flash = gun?.getObjectByName(MUZZLE_FLASH_NAME);
-      if (flash) {
-        flash.visible = true;
-        if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
-        flashTimeoutRef.current = setTimeout(() => {
-          if (flash) flash.visible = false;
-        }, MUZZLE_FLASH_MS);
-      }
     });
   }, [playerId]);
 
@@ -207,6 +237,9 @@ export const Character = ({ velocity, alive, playerId }: Props) => {
     wrapper.worldToLocal(gun.position);
     gun.rotation.set(0, Math.PI, 0);
     gun.scale.setScalar(GUN_SCALE);
+
+    const flash = gun.getObjectByName('muzzleFlash');
+    if (flash) flash.visible = performance.now() < muzzleFlashUntilRef.current;
   });
 
   // State machine. Acts only on actual transitions.
@@ -216,23 +249,50 @@ export const Character = ({ velocity, alive, playerId }: Props) => {
       return;
     }
 
-    const speed = Math.hypot(velocity[0], velocity[2]);
+    // Decompose world velocity into facing-relative components. Server
+    // convention (sim.ts): vx = -sin(yaw)*fwd + cos(yaw)*right, vz =
+    // -cos(yaw)*fwd - sin(yaw)*right. Inverting gives the formulas below.
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    const localForward = -velocity[0] * sy - velocity[2] * cy;
+    const localRight = velocity[0] * cy - velocity[2] * sy;
+    const speed = Math.hypot(localForward, localRight);
     const airborne = Math.abs(velocity[1]) > AIRBORNE_VY;
     const fireClip = CLIP_NAMES.Fire ? actions[CLIP_NAMES.Fire] : undefined;
+    const fireWalkClip = CLIP_NAMES.FireWalk ? actions[CLIP_NAMES.FireWalk] : undefined;
+    const reloadClip = CLIP_NAMES.Reload ? actions[CLIP_NAMES.Reload] : undefined;
+    const reloadWalkClip = CLIP_NAMES.ReloadWalk ? actions[CLIP_NAMES.ReloadWalk] : undefined;
 
-    // Fire takes priority over locomotion (and Jump) when a clip is available
-    // AND we're not airborne (jumping with a fire animation looks worse than
-    // letting Jump play).
+    // Priority (when grounded): Reload > Fire > locomotion. Airborne overrides
+    // both — jumping mid-reload or mid-fire looks worse than letting Jump play.
+    // FireWalk / ReloadWalk are the moving variants (legs cycle while upper
+    // body acts); Fire / Reload are the standing variants.
+    let desired: ClipKey;
+    if (reloading && !airborne && speed >= IDLE_SPEED && reloadWalkClip) {
+      desired = 'ReloadWalk';
+    } else if (reloading && reloadClip && !airborne) {
+      desired = 'Reload';
+    } else if (firing && !airborne && speed >= IDLE_SPEED && fireWalkClip) {
+      desired = 'FireWalk';
+    } else if (firing && fireClip && !airborne) {
+      desired = 'Fire';
+    } else if (airborne) {
+      desired = 'Jump';
+    } else if (speed < IDLE_SPEED) {
+      desired = 'Idle';
+    } else {
+      const dir = directionFromVelocity(localForward, localRight);
+      desired = (speed < WALK_RUN_THRESHOLD ? `Walk${dir}` : `Run${dir}`) as ClipKey;
+    }
+
+    // Fall back gracefully if a clip isn't bound (e.g. loading order, or a
+    // diagonal clip missing from a future trimmed GLB).
     const wanted: ClipKey =
-      firing && fireClip && !airborne
-        ? 'Fire'
-        : airborne
-          ? 'Jump'
-          : speed < IDLE_SPEED
-            ? 'Idle'
-            : speed < WALK_RUN_THRESHOLD
-              ? 'Walk'
-              : 'Run';
+      pickAction(actions, desired)
+        ? desired
+        : speed < WALK_RUN_THRESHOLD
+          ? pickAction(actions, 'WalkF') ? 'WalkF' : 'Idle'
+          : pickAction(actions, 'RunF') ? 'RunF' : 'Idle';
 
     if (currentAnim.current === wanted) return;
 
@@ -253,7 +313,7 @@ export const Character = ({ velocity, alive, playerId }: Props) => {
       next.fadeIn(0.15).play();
     }
     currentAnim.current = wanted;
-  }, [velocity, alive, firing, actions]);
+  }, [velocity, yaw, reloading, alive, firing, actions]);
 
   if (!alive) return null;
 
@@ -321,8 +381,8 @@ const applyClipMode = (
 
   action.paused = false;
   action.timeScale = CLIP_TIMESCALE[mode] ?? 1;
-  if (mode === 'Fire' && freshClip) {
-    // Restart the fire clip from the beginning so each shot replays cleanly.
+  if (freshClip && (mode === 'Fire' || mode === 'Reload' || mode === 'ReloadWalk')) {
+    // Restart these clips from the beginning so each shot/reload replays cleanly.
     action.time = 0;
   }
 };
@@ -423,20 +483,16 @@ const createRifleMesh = (): Group => {
   sight.position.set(0, 0.13, -0.1);
   gun.add(sight);
 
-  // Muzzle flash — placed at the barrel tip, hidden by default. Toggled on
-  // by Character's shot-event handler. Looked up by name so we don't have
-  // to thread an extra ref through the React tree.
-  const flash = new Mesh(
-    new SphereGeometry(0.06, 12, 12),
-    new MeshBasicMaterial({ color: '#ffd060', transparent: true, opacity: 0.9 }),
+  // Muzzle flash — at the barrel tip, hidden by default. Toggled visible for
+  // ~one frame on shot events. Unlit material + fog disabled so it pops.
+  const muzzleFlash = new Mesh(
+    new SphereGeometry(0.06, 10, 10),
+    new MeshBasicMaterial({ color: '#fff5a0', transparent: true, opacity: 0.95, fog: false }),
   );
-  flash.position.set(0, 0.09, -0.6);
-  flash.visible = false;
-  flash.name = MUZZLE_FLASH_NAME;
-  gun.add(flash);
+  muzzleFlash.position.set(0, 0.09, -0.62);
+  muzzleFlash.name = 'muzzleFlash';
+  muzzleFlash.visible = false;
+  gun.add(muzzleFlash);
 
   return gun;
 };
-
-const MUZZLE_FLASH_NAME = 'muzzleFlash';
-const MUZZLE_FLASH_MS = 60;

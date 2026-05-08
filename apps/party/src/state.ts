@@ -8,6 +8,9 @@ export interface ServerPlayer extends PlayerState {
   // runTick uses this to fill gaps when a player isn't sending inputs so they
   // don't freeze in mid-air after spawn or during an AFK pause.
   lastIntegratedAt: number;
+  // Wall-clock time (ms, server frame) the player last took damage.
+  // Health regen kicks in once `now - lastDamagedAt >= PLAYER.regenDelayMs`.
+  lastDamagedAt: number;
 }
 
 export const initialPlayer = (
@@ -36,6 +39,7 @@ export const initialPlayer = (
   pendingInputSeq: 0,
   grounded: true,
   lastIntegratedAt: now,
+  lastDamagedAt: 0,
 });
 
 export const randomSpawn = (): Vec3 => {

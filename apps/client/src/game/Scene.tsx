@@ -5,7 +5,6 @@ import { Arena } from './Map.js';
 import { LocalPlayer } from './LocalPlayer.js';
 import { RemotePlayers } from './Players.js';
 import { FollowCamera } from './Camera.js';
-import { Tracers } from './Tracers.js';
 
 interface Props {
   send(msg: ClientMessage): void;
@@ -32,7 +31,6 @@ export const Scene = ({ send, myName }: Props) => (
     <Arena />
     <LocalPlayer send={send} myName={myName} />
     <RemotePlayers />
-    <Tracers />
     <FollowCamera />
   </Canvas>
 );

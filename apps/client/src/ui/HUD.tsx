@@ -1,5 +1,8 @@
+import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../store.js';
-import { WEAPON, type KillEvent } from '@slipstream/shared';
+import { PLAYER, WEAPON, type KillEvent } from '@slipstream/shared';
+
+const HIT_MARKER_MS = 250;
 
 export const HUD = () => {
   const myId = useGame((s) => s.myId);
@@ -8,17 +11,48 @@ export const HUD = () => {
   const conn = useGame((s) => s.conn);
   const me = myId ? lastSnap?.players.get(myId) : undefined;
 
+  // Hit marker: brief X overlay around the crosshair when one of MY shots
+  // landed on someone. Subscribed-via-store so we react to shot events as
+  // they arrive instead of waiting for a re-render.
+  const [hitAt, setHitAt] = useState(0);
+  const seenEventsRef = useRef(0);
+  useEffect(() => {
+    return useGame.subscribe((state) => {
+      if (!myId) return;
+      if (state.events.length === seenEventsRef.current) return;
+      const fresh = state.events.slice(seenEventsRef.current);
+      seenEventsRef.current = state.events.length;
+      let hitMine = false;
+      for (const ev of fresh) {
+        if (ev.type === 'shot' && ev.shooterId === myId && ev.hit !== null) {
+          hitMine = true;
+        }
+      }
+      if (hitMine) setHitAt(performance.now());
+    });
+  }, [myId]);
+
+  // Auto-clear after HIT_MARKER_MS so the marker fades out.
+  useEffect(() => {
+    if (!hitAt) return;
+    const t = setTimeout(() => setHitAt(0), HIT_MARKER_MS);
+    return () => clearTimeout(t);
+  }, [hitAt]);
+
+  const showHitMarker = hitAt > 0;
+
   return (
     <>
       <div style={crosshairOuter}>
         <div style={crosshair} />
+        {showHitMarker && <HitMarker />}
       </div>
 
       <div style={statusBar}>
         <span style={{ color: connColor(conn) }}>● {conn}</span>
         {me && (
           <>
-            <span>HP {Math.round(me.health)}</span>
+            {me.health < PLAYER.maxHealth && <HealthBar health={me.health} />}
             <span>
               AMMO {me.ammo}/{WEAPON.magazineSize}
               {me.reloading && ' (reloading...)'}
@@ -46,6 +80,28 @@ export const HUD = () => {
           ))}
       </div>
     </>
+  );
+};
+
+// Four short ticks arranged in an X around the crosshair — classic hit-marker
+// look. Lives inside the crosshairOuter (already centered on screen) and
+// uses absolute positioning to fan out from the center.
+const HitMarker = () => (
+  <>
+    <div style={{ ...hitTick, transform: 'translate(-50%, -50%) rotate(45deg) translate(0, -10px)' }} />
+    <div style={{ ...hitTick, transform: 'translate(-50%, -50%) rotate(45deg) translate(0, 10px)' }} />
+    <div style={{ ...hitTick, transform: 'translate(-50%, -50%) rotate(-45deg) translate(0, -10px)' }} />
+    <div style={{ ...hitTick, transform: 'translate(-50%, -50%) rotate(-45deg) translate(0, 10px)' }} />
+  </>
+);
+
+const HealthBar = ({ health }: { health: number }) => {
+  const frac = Math.max(0, Math.min(1, health / PLAYER.maxHealth));
+  const color = frac > 0.6 ? '#5fff8f' : frac > 0.3 ? '#ffd060' : '#ff5050';
+  return (
+    <span style={healthBarOuter} aria-label={`Health ${Math.round(health)}`}>
+      <span style={{ ...healthBarFill, width: `${frac * 100}%`, background: color }} />
+    </span>
   );
 };
 
@@ -83,6 +139,17 @@ const crosshair: React.CSSProperties = {
   boxShadow: '0 0 0 1px rgba(0,0,0,0.6)',
 };
 
+const hitTick: React.CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  width: 2,
+  height: 8,
+  background: '#ffe080',
+  boxShadow: '0 0 0 1px rgba(0,0,0,0.7)',
+  borderRadius: 1,
+};
+
 const statusBar: React.CSSProperties = {
   position: 'fixed',
   left: 16,
@@ -116,6 +183,23 @@ const killFeedStyle: React.CSSProperties = {
   gap: 4,
   pointerEvents: 'none',
   fontFamily: 'ui-monospace, monospace',
+};
+
+const healthBarOuter: React.CSSProperties = {
+  display: 'inline-block',
+  width: 140,
+  height: 4,
+  background: '#3a0a0a',
+  border: '1px solid rgba(0,0,0,0.7)',
+  borderRadius: 2,
+  overflow: 'hidden',
+  verticalAlign: 'middle',
+};
+
+const healthBarFill: React.CSSProperties = {
+  display: 'block',
+  height: '100%',
+  transition: 'width 120ms linear, background 200ms linear',
 };
 
 const killRow: React.CSSProperties = {

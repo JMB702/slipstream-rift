@@ -16,11 +16,15 @@ export const RemotePlayer = ({ id }: Props) => {
     alive: boolean;
     health: number;
     velocity: Vec3;
+    yaw: number;
+    reloading: boolean;
   }>({
     name: '',
     alive: true,
     health: 100,
     velocity: [0, 0, 0],
+    yaw: 0,
+    reloading: false,
   });
 
   useFrame(() => {
@@ -66,6 +70,8 @@ export const RemotePlayer = ({ id }: Props) => {
     renderState.current.alive = target.alive;
     renderState.current.health = target.health;
     renderState.current.velocity = target.velocity;
+    renderState.current.yaw = target.yaw;
+    renderState.current.reloading = target.reloading;
   });
 
   const initialName = useMemo(() => latestName(id), [id]);
@@ -77,6 +83,8 @@ export const RemotePlayer = ({ id }: Props) => {
         alive={renderState.current.alive}
         health={renderState.current.health}
         velocity={renderState.current.velocity}
+        yaw={renderState.current.yaw}
+        reloading={renderState.current.reloading}
         playerId={id}
       />
     </group>

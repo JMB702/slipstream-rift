@@ -83,10 +83,14 @@ export default class SlipstreamServer implements Party.Server {
         const now = this.serverTime();
         for (const frame of msg.frames) {
           if (frame.seq <= player.lastSeenSeq) continue;
-          // No firing while sprinting — silently demote sprint when fire is
-          // pressed. Player walks-while-firing instead of running-while-firing.
-          const effectiveFrame =
-            frame.fire && frame.sprint ? { ...frame, sprint: false } : frame;
+          // No firing or reloading while sprinting — silently demote sprint
+          // when either fires. Reload check uses both the input flag (newly
+          // pressed R) and the player's existing reloading state (so they
+          // keep walking through an in-progress reload even if shift returns).
+          const mustWalk =
+            (frame.fire && frame.sprint) ||
+            (frame.sprint && (frame.reload || player.reloading));
+          const effectiveFrame = mustWalk ? { ...frame, sprint: false } : frame;
           applyInput(player, effectiveFrame, now);
           if (effectiveFrame.fire) this.pendingFire.add(player.id);
         }

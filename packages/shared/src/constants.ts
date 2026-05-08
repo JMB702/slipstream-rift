@@ -27,6 +27,10 @@ export const PLAYER = {
   gravity: 24.0,
   maxHealth: 100,
   respawnMs: 3000,
+  // Health regen kicks in after this long without taking damage.
+  regenDelayMs: 4000,
+  // Once regen starts, restore this many HP per second until full.
+  regenPerSec: 30,
 } as const;
 
 export const WEAPON = {
