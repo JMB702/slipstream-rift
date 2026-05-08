@@ -149,3 +149,55 @@ const overlapsXZ = (px: number, pz: number, o: Obstacle, r: number): boolean =>
 
 const clamp = (v: number, lo: number, hi: number): number =>
   v < lo ? lo : v > hi ? hi : v;
+
+// Slabs method. Returns the t of the entry hit along `dir` from `origin`, or
+// null if the ray misses or hits beyond `maxDist`. Pass `inflate` to grow the
+// box on every axis — useful for treating the caster as a sphere of radius
+// `inflate` (the inflated-AABB test is conservative at corners, which is
+// exactly what we want for camera collision).
+export const rayAABB = (
+  origin: Vec3,
+  dir: Vec3,
+  o: Obstacle,
+  maxDist: number,
+  inflate = 0,
+): number | null => {
+  let tmin = 0;
+  let tmax = maxDist;
+  for (let axis = 0; axis < 3; axis++) {
+    const min = o.pos[axis]! - o.halfSize[axis]! - inflate;
+    const max = o.pos[axis]! + o.halfSize[axis]! + inflate;
+    const d = dir[axis]!;
+    const oo = origin[axis]!;
+    if (Math.abs(d) < 1e-8) {
+      if (oo < min || oo > max) return null;
+      continue;
+    }
+    const invD = 1 / d;
+    let t1 = (min - oo) * invD;
+    let t2 = (max - oo) * invD;
+    if (t1 > t2) {
+      const tmp = t1;
+      t1 = t2;
+      t2 = tmp;
+    }
+    if (t1 > tmin) tmin = t1;
+    if (t2 < tmax) tmax = t2;
+    if (tmin > tmax) return null;
+  }
+  return tmin;
+};
+
+export const raycastObstacles = (
+  origin: Vec3,
+  dir: Vec3,
+  maxDist: number,
+  inflate = 0,
+): number | null => {
+  let best: number | null = null;
+  for (const o of OBSTACLES) {
+    const t = rayAABB(origin, dir, o, maxDist, inflate);
+    if (t !== null && (best === null || t < best)) best = t;
+  }
+  return best;
+};

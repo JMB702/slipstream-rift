@@ -1,11 +1,10 @@
 import {
-  OBSTACLES,
   PLAYER,
   WEAPON,
   applyMovement,
+  raycastObstacles,
   type GameEvent,
   type InputFrame,
-  type Obstacle,
   type Vec3,
 } from '@slipstream/shared';
 import type { ServerPlayer } from './state.js';
@@ -204,39 +203,3 @@ const raySphere = (
   return t;
 };
 
-const raycastObstacles = (origin: Vec3, dir: Vec3, maxDist: number): number | null => {
-  let best: number | null = null;
-  for (const o of OBSTACLES) {
-    const t = rayAABB(origin, dir, o, maxDist);
-    if (t !== null && (best === null || t < best)) best = t;
-  }
-  return best;
-};
-
-const rayAABB = (origin: Vec3, dir: Vec3, o: Obstacle, maxDist: number): number | null => {
-  // Slabs method. Returns the t of the entry hit, or null if the ray misses.
-  let tmin = 0;
-  let tmax = maxDist;
-  for (let axis = 0; axis < 3; axis++) {
-    const min = o.pos[axis]! - o.halfSize[axis]!;
-    const max = o.pos[axis]! + o.halfSize[axis]!;
-    const d = dir[axis]!;
-    const oo = origin[axis]!;
-    if (Math.abs(d) < 1e-8) {
-      if (oo < min || oo > max) return null;
-      continue;
-    }
-    const invD = 1 / d;
-    let t1 = (min - oo) * invD;
-    let t2 = (max - oo) * invD;
-    if (t1 > t2) {
-      const tmp = t1;
-      t1 = t2;
-      t2 = tmp;
-    }
-    if (t1 > tmin) tmin = t1;
-    if (t2 < tmax) tmax = t2;
-    if (tmin > tmax) return null;
-  }
-  return tmin;
-};
