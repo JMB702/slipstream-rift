@@ -10,7 +10,7 @@ import {
   type GameSnapshot,
   type ServerMessage,
 } from '@slipstream/shared';
-import { applyInput, finishReload, maybeRespawn, tryFire } from './simulation.js';
+import { applyInput, finishReload, integrateIdle, maybeRespawn, tryFire } from './simulation.js';
 import { initialPlayer, randomSpawn, type ServerPlayer } from './state.js';
 
 export default class SlipstreamServer implements Party.Server {
@@ -40,7 +40,7 @@ export default class SlipstreamServer implements Party.Server {
     }
     const url = new URL(ctx.request.url);
     const name = (url.searchParams.get('name') ?? 'Player').slice(0, 24) || 'Player';
-    const player = initialPlayer(conn.id, conn.id, name, randomSpawn());
+    const player = initialPlayer(conn.id, conn.id, name, randomSpawn(), this.serverTime());
     this.players.set(conn.id, player);
 
     // If the room had emptied out, timers were stopped — restart them now.
@@ -126,6 +126,9 @@ export default class SlipstreamServer implements Party.Server {
     for (const p of all) {
       finishReload(p, now);
       maybeRespawn(p, now);
+      // Run physics for any time gap that hasn't already been integrated by an
+      // arriving input — keeps idle/AFK/just-spawned players from floating.
+      integrateIdle(p, now);
     }
 
     if (this.pendingFire.size > 0) {

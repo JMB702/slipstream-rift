@@ -10,7 +10,10 @@ import type { ServerPlayer } from './state.js';
 import { randomSpawn } from './state.js';
 
 export const applyInput = (player: ServerPlayer, input: InputFrame, now: number): void => {
-  if (!player.alive) return;
+  if (!player.alive) {
+    player.lastSeenSeq = input.seq;
+    return;
+  }
   const next = applyMovement(player, input);
   player.position = next.position;
   player.velocity = next.velocity;
@@ -18,11 +21,40 @@ export const applyInput = (player: ServerPlayer, input: InputFrame, now: number)
   player.pitch = next.pitch;
   player.grounded = next.grounded;
   player.lastSeenSeq = input.seq;
+  player.lastIntegratedAt = now;
 
   if (input.reload && !player.reloading && player.ammo < WEAPON.magazineSize) {
     player.reloading = true;
     player.reloadDoneAt = now + WEAPON.reloadMs;
   }
+};
+
+// Fill physics gaps for players who aren't sending inputs (idle, AFK, just spawned).
+// Without this, gravity never runs for them and they freeze at the spawn height.
+export const integrateIdle = (player: ServerPlayer, now: number): void => {
+  if (!player.alive) {
+    player.lastIntegratedAt = now;
+    return;
+  }
+  const dtMs = now - player.lastIntegratedAt;
+  if (dtMs <= 0) return;
+  const idleFrame: InputFrame = {
+    seq: 0,
+    dtMs,
+    forward: 0,
+    right: 0,
+    jump: false,
+    sprint: false,
+    fire: false,
+    reload: false,
+    yaw: player.yaw,
+    pitch: player.pitch,
+  };
+  const next = applyMovement(player, idleFrame);
+  player.position = next.position;
+  player.velocity = next.velocity;
+  player.grounded = next.grounded;
+  player.lastIntegratedAt = now;
 };
 
 export const finishReload = (player: ServerPlayer, now: number): void => {
@@ -43,6 +75,8 @@ export const maybeRespawn = (player: ServerPlayer, now: number): void => {
     player.ammo = WEAPON.magazineSize;
     player.reloading = false;
     player.reloadDoneAt = null;
+    player.grounded = true;
+    player.lastIntegratedAt = now;
   }
 };
 

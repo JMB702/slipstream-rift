@@ -4,6 +4,10 @@ export interface ServerPlayer extends PlayerState {
   connectionId: string;
   pendingInputSeq: number;
   grounded: boolean;
+  // Wall-clock time (ms, server frame) of the last physics integration.
+  // runTick uses this to fill gaps when a player isn't sending inputs so they
+  // don't freeze in mid-air after spawn or during an AFK pause.
+  lastIntegratedAt: number;
 }
 
 export const initialPlayer = (
@@ -11,6 +15,7 @@ export const initialPlayer = (
   id: string,
   name: string,
   spawn: Vec3,
+  now: number,
 ): ServerPlayer => ({
   id,
   connectionId,
@@ -29,7 +34,8 @@ export const initialPlayer = (
   deaths: 0,
   lastSeenSeq: 0,
   pendingInputSeq: 0,
-  grounded: false,
+  grounded: true,
+  lastIntegratedAt: now,
 });
 
 export const randomSpawn = (): Vec3 => {

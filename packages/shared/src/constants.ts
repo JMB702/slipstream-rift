@@ -7,9 +7,10 @@ export const MAX_PLAYERS = 8;
 
 export const MAP = {
   size: 60,
-  // Y-coordinate of the capsule center at spawn. With height=1.8, ground-rest is 0.9.
-  // Spawn slightly higher (1.5) so players visibly drop in.
-  spawnHeight: 1.5,
+  // Y-coordinate of the capsule center at spawn = ground-rest height (height/2).
+  // Spawning above floor would cause idle players to float forever, since the
+  // server only integrates gravity when an input arrives.
+  spawnHeight: 0.9,
 } as const;
 
 export const PLAYER = {
