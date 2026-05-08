@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import { Vector3 } from 'three';
 import { PLAYER } from '@slipstream/shared';
 import { useGame } from '../store.js';
-import { getActiveInput, getPredictedState } from './LocalPlayer.js';
+import { getActiveInput, getPredictedState } from './local-state.js';
 
 const BACK_DIST = 3.4;
 const SHOULDER_OFFSET = 0.65;

@@ -30,8 +30,7 @@ export default class SlipstreamServer implements Party.Server {
 
   onStart(): void {
     this.startedAt = Date.now();
-    this.tickTimer = setInterval(() => this.runTick(), TICK_MS);
-    this.snapshotTimer = setInterval(() => this.broadcastSnapshot(), SNAPSHOT_MS);
+    this.startTimers();
   }
 
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext): void {
@@ -44,12 +43,24 @@ export default class SlipstreamServer implements Party.Server {
     const player = initialPlayer(conn.id, conn.id, name, randomSpawn());
     this.players.set(conn.id, player);
 
+    // If the room had emptied out, timers were stopped — restart them now.
+    this.startTimers();
+
     this.send(conn, {
       type: 'welcome',
       you: player.id,
       serverTime: this.serverTime(),
     });
     this.broadcastSnapshot();
+  }
+
+  private startTimers(): void {
+    if (this.tickTimer === null) {
+      this.tickTimer = setInterval(() => this.runTick(), TICK_MS);
+    }
+    if (this.snapshotTimer === null) {
+      this.snapshotTimer = setInterval(() => this.broadcastSnapshot(), SNAPSHOT_MS);
+    }
   }
 
   onMessage(raw: string, sender: Party.Connection): void {

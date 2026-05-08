@@ -10,25 +10,14 @@ import {
   type MovableState,
 } from '@slipstream/shared';
 import { useGame } from '../store.js';
-import { createInput, type InputState } from './input.js';
+import { createInput } from './input.js';
+import { setActiveInput, setPredictedState, consumeFire } from './local-state.js';
 import { PlayerModel, colorForId } from './PlayerModel.js';
 
 interface Props {
   send(msg: ClientMessage): void;
   myName: string;
 }
-
-let activeInput: ReturnType<typeof createInput> | null = null;
-export const getActiveInput = (): InputState | null => activeInput?.state ?? null;
-
-const predicted: MovableState = {
-  position: [0, PLAYER.height / 2, 0],
-  velocity: [0, 0, 0],
-  yaw: 0,
-  pitch: 0,
-  grounded: true,
-};
-export const getPredictedState = (): MovableState => predicted;
 
 export const LocalPlayer = ({ send, myName }: Props) => {
   const ref = useRef<Group>(null);
@@ -37,12 +26,16 @@ export const LocalPlayer = ({ send, myName }: Props) => {
   const accumulator = useRef(0);
   const lastSent = useRef(performance.now());
   const inputBuffer = useRef<InputFrame[]>([]);
+  const liveInputRef = useRef<ReturnType<typeof createInput> | null>(null);
 
   useEffect(() => {
-    activeInput = createInput(gl.domElement);
+    const input = createInput(gl.domElement);
+    liveInputRef.current = input;
+    setActiveInput(input);
     return () => {
-      activeInput?.destroy();
-      activeInput = null;
+      input.destroy();
+      if (liveInputRef.current === input) liveInputRef.current = null;
+      setActiveInput(null);
     };
   }, [gl]);
 
@@ -55,24 +48,25 @@ export const LocalPlayer = ({ send, myName }: Props) => {
     const dtMs = delta * 1000;
     accumulator.current += dtMs;
 
-    if (accumulator.current >= TICK_MS && activeInput) {
+    const live = liveInputRef.current?.state;
+
+    if (accumulator.current >= TICK_MS && live) {
       const sendDt = performance.now() - lastSent.current;
       lastSent.current = performance.now();
       accumulator.current = 0;
 
-      const inp = activeInput.state;
-      const fired = activeInput.consumeFire();
+      const fired = consumeFire();
       const frame: InputFrame = {
         seq: seqRef.current++,
         dtMs: sendDt,
-        forward: inp.forward,
-        right: inp.right,
-        jump: inp.jump,
-        sprint: inp.sprint,
+        forward: live.forward,
+        right: live.right,
+        jump: live.jump,
+        sprint: live.sprint,
         fire: fired,
-        reload: inp.reload,
-        yaw: inp.yaw,
-        pitch: inp.pitch,
+        reload: live.reload,
+        yaw: live.yaw,
+        pitch: live.pitch,
       };
       inputBuffer.current.push(frame);
       if (inputBuffer.current.length > 120) inputBuffer.current.shift();
@@ -86,11 +80,13 @@ export const LocalPlayer = ({ send, myName }: Props) => {
     if (!me) return;
 
     if (!me.alive) {
-      predicted.position = me.position;
-      predicted.velocity = [0, 0, 0];
-      predicted.yaw = me.yaw;
-      predicted.pitch = me.pitch;
-      predicted.grounded = true;
+      setPredictedState({
+        position: me.position,
+        velocity: [0, 0, 0],
+        yaw: me.yaw,
+        pitch: me.pitch,
+        grounded: true,
+      });
       ref.current.position.set(me.position[0], me.position[1], me.position[2]);
       ref.current.rotation.y = me.yaw;
       return;
@@ -115,8 +111,7 @@ export const LocalPlayer = ({ send, myName }: Props) => {
     // Extrapolate the partial frame between the last sent input and now
     // so motion is continuous between 30Hz input ticks.
     const partialDtMs = performance.now() - lastSent.current;
-    if (partialDtMs > 0 && activeInput) {
-      const live = activeInput.state;
+    if (partialDtMs > 0 && live) {
       state = applyMovement(state, {
         seq: 0,
         dtMs: partialDtMs,
@@ -131,11 +126,7 @@ export const LocalPlayer = ({ send, myName }: Props) => {
       });
     }
 
-    predicted.position = state.position;
-    predicted.velocity = state.velocity;
-    predicted.yaw = state.yaw;
-    predicted.pitch = state.pitch;
-    predicted.grounded = state.grounded;
+    setPredictedState(state);
 
     ref.current.position.set(state.position[0], state.position[1], state.position[2]);
     ref.current.rotation.y = state.yaw;

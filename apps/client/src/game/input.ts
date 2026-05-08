@@ -46,10 +46,23 @@ export const createInput = (canvas: HTMLCanvasElement): {
     updateAxes();
   };
 
+  let dropNextMouseMove = false;
+
   const onMouseMove = (e: MouseEvent) => {
     if (!state.pointerLocked) return;
-    state.yaw -= e.movementX * 0.0025;
-    state.pitch -= e.movementY * 0.0025;
+    if (document.pointerLockElement !== canvas) return;
+    if (dropNextMouseMove) {
+      dropNextMouseMove = false;
+      return;
+    }
+    // Browsers occasionally deliver large movement deltas — typically the first
+    // event after pointer-lock engages, after a tab regains focus, or when the
+    // OS coalesces buffered mouse motion. Clamp so a single spurious event
+    // can't whip the camera around.
+    const dx = clampMovement(e.movementX);
+    const dy = clampMovement(e.movementY);
+    state.yaw -= dx * 0.0025;
+    state.pitch -= dy * 0.0025;
     const lim = Math.PI / 2 - 0.01;
     if (state.pitch > lim) state.pitch = lim;
     if (state.pitch < -lim) state.pitch = -lim;
@@ -70,6 +83,7 @@ export const createInput = (canvas: HTMLCanvasElement): {
 
   const onPointerLockChange = () => {
     state.pointerLocked = document.pointerLockElement === canvas;
+    if (state.pointerLocked) dropNextMouseMove = true;
   };
 
   const onContextMenu = (e: MouseEvent) => e.preventDefault();
@@ -100,4 +114,12 @@ export const createInput = (canvas: HTMLCanvasElement): {
       canvas.removeEventListener('contextmenu', onContextMenu);
     },
   };
+};
+
+const MAX_MOUSE_DELTA = 200;
+const clampMovement = (v: number): number => {
+  if (!Number.isFinite(v)) return 0;
+  if (v > MAX_MOUSE_DELTA) return MAX_MOUSE_DELTA;
+  if (v < -MAX_MOUSE_DELTA) return -MAX_MOUSE_DELTA;
+  return v;
 };
