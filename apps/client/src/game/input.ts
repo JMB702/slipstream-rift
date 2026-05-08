@@ -64,8 +64,8 @@ export const createInput = (canvas: HTMLCanvasElement): {
     state.fire = true;
   };
 
-  const onMouseUp = (e: MouseEvent) => {
-    if (e.button === 0) state.fire = false;
+  const onMouseUp = (_e: MouseEvent) => {
+    // intentionally do not clear state.fire — consumeFire is the only consumer
   };
 
   const onPointerLockChange = () => {

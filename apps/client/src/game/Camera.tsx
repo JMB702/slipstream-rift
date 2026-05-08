@@ -5,13 +5,15 @@ import { PLAYER } from '@slipstream/shared';
 import { useGame } from '../store.js';
 import { getActiveInput, getPredictedState } from './LocalPlayer.js';
 
-const FOLLOW_DIST = 5;
-const FOLLOW_HEIGHT = 1.5;
+const BACK_DIST = 3.4;
+const SHOULDER_OFFSET = 0.65;
+const HEIGHT_OFFSET = 0.55;
+const AIM_DIST = 25;
 
 export const FollowCamera = () => {
   const { camera } = useThree();
-  const target = useRef(new Vector3());
   const desired = useRef(new Vector3());
+  const aim = useRef(new Vector3());
 
   useFrame(() => {
     const myId = useGame.getState().myId;
@@ -22,25 +24,36 @@ export const FollowCamera = () => {
     const yaw = inp?.yaw ?? pred.yaw;
     const pitch = inp?.pitch ?? pred.pitch;
 
-    target.current.set(
-      pred.position[0],
-      pred.position[1] + PLAYER.height * 0.6,
-      pred.position[2],
-    );
-
     const cp = Math.cos(pitch);
-    const offsetX = Math.sin(yaw) * cp * FOLLOW_DIST;
-    const offsetY = -Math.sin(pitch) * FOLLOW_DIST + FOLLOW_HEIGHT;
-    const offsetZ = Math.cos(yaw) * cp * FOLLOW_DIST;
+    const sp = Math.sin(pitch);
+    const sy = Math.sin(yaw);
+    const cy = Math.cos(yaw);
 
+    // forward = direction the player is looking, in world space
+    const fx = -sy * cp;
+    const fy = sp;
+    const fz = -cy * cp;
+
+    // right = forward × world up, then normalized in xz
+    const rx = cy;
+    const rz = -sy;
+
+    const eyeX = pred.position[0];
+    const eyeY = pred.position[1] + PLAYER.height * 0.55;
+    const eyeZ = pred.position[2];
+
+    // camera sits behind the player along -forward, lifted, and offset to the right shoulder
     desired.current.set(
-      target.current.x + offsetX,
-      target.current.y + offsetY,
-      target.current.z + offsetZ,
+      eyeX - fx * BACK_DIST + rx * SHOULDER_OFFSET,
+      eyeY - fy * BACK_DIST + HEIGHT_OFFSET,
+      eyeZ - fz * BACK_DIST + rz * SHOULDER_OFFSET,
     );
 
-    camera.position.lerp(desired.current, 0.25);
-    camera.lookAt(target.current);
+    // aim point: a point far along the look ray from the eye. crosshair (screen center) lands here.
+    aim.current.set(eyeX + fx * AIM_DIST, eyeY + fy * AIM_DIST, eyeZ + fz * AIM_DIST);
+
+    camera.position.lerp(desired.current, 0.4);
+    camera.lookAt(aim.current);
   });
 
   return null;

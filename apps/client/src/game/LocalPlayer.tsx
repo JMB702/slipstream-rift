@@ -111,6 +111,26 @@ export const LocalPlayer = ({ send, myName }: Props) => {
     for (const frame of inputBuffer.current) {
       state = applyMovement(state, frame);
     }
+
+    // Extrapolate the partial frame between the last sent input and now
+    // so motion is continuous between 30Hz input ticks.
+    const partialDtMs = performance.now() - lastSent.current;
+    if (partialDtMs > 0 && activeInput) {
+      const live = activeInput.state;
+      state = applyMovement(state, {
+        seq: 0,
+        dtMs: partialDtMs,
+        forward: live.forward,
+        right: live.right,
+        jump: false,
+        sprint: live.sprint,
+        fire: false,
+        reload: false,
+        yaw: live.yaw,
+        pitch: live.pitch,
+      });
+    }
+
     predicted.position = state.position;
     predicted.velocity = state.velocity;
     predicted.yaw = state.yaw;
