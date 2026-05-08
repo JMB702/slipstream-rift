@@ -70,8 +70,6 @@ export const Character = ({ velocity, alive }: Props) => {
       return;
     }
     const gun = createGunMesh();
-    // Tuning offsets — relative to the hand bone's local space. These were
-    // dialed for Soldier.glb's Mixamo skeleton; tweak if the model changes.
     gun.position.set(GUN_POS_X, GUN_POS_Y, GUN_POS_Z);
     gun.rotation.set(GUN_ROT_X, GUN_ROT_Y, GUN_ROT_Z);
     gun.scale.setScalar(GUN_SCALE);
@@ -151,14 +149,16 @@ const JUMP_POSE_TIME = 0.35;
 
 // ----- Gun -----
 // Position/rotation/scale relative to the right-hand bone's local space.
-// Tweak these if you swap the model and the gun ends up floating off the hand.
+// Currently configured for VISIBILITY DIAGNOSTIC: at bone origin, large,
+// bright. Once you can see where it lands, tune to a realistic position
+// and shrink + dark the materials.
 const GUN_POS_X = 0;
 const GUN_POS_Y = 0;
-const GUN_POS_Z = 0.1;
+const GUN_POS_Z = 0;
 const GUN_ROT_X = 0;
-const GUN_ROT_Y = Math.PI / 2;
+const GUN_ROT_Y = 0;
 const GUN_ROT_Z = 0;
-const GUN_SCALE = 1;
+const GUN_SCALE = 4;
 
 const findRightHandBone = (root: Object3D): Object3D | null => {
   let best: Object3D | null = null;
@@ -185,9 +185,10 @@ const findRightHandBone = (root: Object3D): Object3D | null => {
 // enough for an MVP and avoids any asset-licensing question.
 const createGunMesh = (): Group => {
   const gun = new Group();
-
-  const metal = new MeshStandardMaterial({ color: '#1a1a1a', metalness: 0.7, roughness: 0.35 });
-  const wood = new MeshStandardMaterial({ color: '#3a2818', metalness: 0.05, roughness: 0.85 });
+  // Temporarily bright so we can SEE where the gun lands while tuning the
+  // hand-bone offset. Tone these back to dark metal once placement is right.
+  const metal = new MeshStandardMaterial({ color: '#ff3030', metalness: 0.4, roughness: 0.4 });
+  const wood = new MeshStandardMaterial({ color: '#ffaa00', metalness: 0.05, roughness: 0.85 });
 
   // Receiver (main body)
   const receiver = new Mesh(new BoxGeometry(0.05, 0.07, 0.22), metal);
