@@ -18,8 +18,13 @@ export const PLAYER = {
   height: 1.8,
   walkSpeed: 6.0,
   sprintSpeed: 9.0,
-  jumpSpeed: 7.0,
-  gravity: 22.0,
+  // Jump tuned so the short scattered slabs (top y=1 and y=1.5) are reachable.
+  // With jumpSpeed=9, gravity=24: peak height ≈ 1.69m above standing, peak
+  // center y ≈ 2.59m. Margin to mount a y=1.5 block: 0.19m (comfortable).
+  // y=2 blocks still unreachable (margin -0.31m), preserving the cover-vs-
+  // platform distinction. Time to peak ≈ 0.375s, total airtime ≈ 0.75s.
+  jumpSpeed: 9.0,
+  gravity: 24.0,
   maxHealth: 100,
   respawnMs: 3000,
 } as const;
