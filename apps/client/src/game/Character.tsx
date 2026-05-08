@@ -258,15 +258,20 @@ const applyClipMode = (
 };
 
 // =============================================================================
-// Rifle attached to the right-hand bone. Tunable offsets — Mixamo's right-hand
-// bone has its local axes oriented along the fingers, so the rifle needs to
-// rotate to align with the grip direction. Adjust if the rifle floats off-hand.
+// Rifle attached to the right-hand bone.
+// Mixamo bone convention: hand bone's local +Y points along the fingers.
+// Gun mesh convention: barrel along local -Z, top of receiver along +Y.
+// To get barrel-along-finger-direction we rotate the gun -90° around X
+// (so gun's local -Z aligns with bone's local +Y, and gun's +Y rolls to +Z).
+// Position offset is small — the gun's origin is at the pistol grip, so
+// putting it slightly "forward" along the bone (+Y in bone-local) places
+// the grip in the palm.
 // =============================================================================
 const GUN_POS_X = 0;
 const GUN_POS_Y = 0.04;
-const GUN_POS_Z = 0.12;
-const GUN_ROT_X = 0;
-const GUN_ROT_Y = Math.PI / 2;
+const GUN_POS_Z = 0;
+const GUN_ROT_X = -Math.PI / 2;
+const GUN_ROT_Y = 0;
 const GUN_ROT_Z = 0;
 
 // Drop position tracks on the Hips (root) bone from every clip, replacing
