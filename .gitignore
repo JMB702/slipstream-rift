@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.turbo/
+.partykit/
+.vercel/
+.claude/
+.DS_Store
+*.log
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+coverage/
