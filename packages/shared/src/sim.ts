@@ -1,4 +1,4 @@
-import { MAP, PLAYER } from './constants.js';
+import { MAP, OBSTACLES, PLAYER, type Obstacle } from './constants.js';
 import type { InputFrame } from './messages.js';
 import type { Vec3 } from './state.js';
 
@@ -24,8 +24,8 @@ export const applyMovement = (state: MovableState, input: InputFrame): MovableSt
   const sin = Math.sin(yaw);
   const cos = Math.cos(yaw);
 
-  const vx = (-sin * fwd + cos * strafe) * speed;
-  const vz = (-cos * fwd - sin * strafe) * speed;
+  let vx = (-sin * fwd + cos * strafe) * speed;
+  let vz = (-cos * fwd - sin * strafe) * speed;
 
   let vy = state.velocity[1];
   let grounded = state.grounded;
@@ -35,22 +35,90 @@ export const applyMovement = (state: MovableState, input: InputFrame): MovableSt
   }
   vy -= PLAYER.gravity * dt;
 
-  let px = state.position[0] + vx * dt;
-  let py = state.position[1] + vy * dt;
-  let pz = state.position[2] + vz * dt;
+  const r = PLAYER.radius;
+  const halfH = PLAYER.height / 2;
+  const floor = halfH;
 
-  // position represents the capsule center; ground-rest is height/2.
-  const floor = PLAYER.height / 2;
-  if (py <= floor) {
-    py = floor;
+  // Per-axis swept collision against AABB obstacles. Treat the player as an
+  // upright cylinder (radius r, half-height halfH) — slight overlap at AABB
+  // corners but cheap and good enough for an MVP. Resolving X/Y/Z separately
+  // gives natural sliding along walls.
+
+  let px = state.position[0];
+  let py = state.position[1];
+  let pz = state.position[2];
+
+  // X axis
+  const targetX = px + vx * dt;
+  let resolvedX = targetX;
+  for (const o of OBSTACLES) {
+    if (!overlapsYZ(py, pz, o, r, halfH)) continue;
+    const minX = o.pos[0] - o.halfSize[0] - r;
+    const maxX = o.pos[0] + o.halfSize[0] + r;
+    if (resolvedX > minX && resolvedX < maxX) {
+      if (px <= minX) {
+        resolvedX = minX;
+      } else if (px >= maxX) {
+        resolvedX = maxX;
+      } else {
+        resolvedX = px;
+      }
+      vx = 0;
+    }
+  }
+  px = resolvedX;
+
+  // Z axis
+  const targetZ = pz + vz * dt;
+  let resolvedZ = targetZ;
+  for (const o of OBSTACLES) {
+    if (!overlapsXY(px, py, o, r, halfH)) continue;
+    const minZ = o.pos[2] - o.halfSize[2] - r;
+    const maxZ = o.pos[2] + o.halfSize[2] + r;
+    if (resolvedZ > minZ && resolvedZ < maxZ) {
+      if (pz <= minZ) {
+        resolvedZ = minZ;
+      } else if (pz >= maxZ) {
+        resolvedZ = maxZ;
+      } else {
+        resolvedZ = pz;
+      }
+      vz = 0;
+    }
+  }
+  pz = resolvedZ;
+
+  // Y axis: gravity / jump, then floor and obstacle-top/bottom resolution
+  const targetY = py + vy * dt;
+  let resolvedY = targetY;
+  if (resolvedY <= floor) {
+    resolvedY = floor;
     vy = 0;
     grounded = true;
   } else {
     grounded = false;
   }
+  for (const o of OBSTACLES) {
+    if (!overlapsXZ(px, pz, o, r)) continue;
+    const top = o.pos[1] + o.halfSize[1] + halfH;
+    const bottom = o.pos[1] - o.halfSize[1] - halfH;
+    if (resolvedY < top && resolvedY > bottom) {
+      if (py >= top) {
+        resolvedY = top;
+        if (vy < 0) vy = 0;
+        grounded = true;
+      } else if (py <= bottom) {
+        resolvedY = bottom;
+        if (vy > 0) vy = 0;
+      }
+    }
+  }
+  py = resolvedY;
 
-  px = clamp(px, -HALF_MAP + PLAYER.radius, HALF_MAP - PLAYER.radius);
-  pz = clamp(pz, -HALF_MAP + PLAYER.radius, HALF_MAP - PLAYER.radius);
+  // Map perimeter as a final safety clamp (cheap, prevents escaping if a
+  // collision pass somehow misses).
+  px = clamp(px, -HALF_MAP + r, HALF_MAP - r);
+  pz = clamp(pz, -HALF_MAP + r, HALF_MAP - r);
 
   return {
     position: [px, py, pz],
@@ -60,6 +128,24 @@ export const applyMovement = (state: MovableState, input: InputFrame): MovableSt
     grounded,
   };
 };
+
+const overlapsYZ = (py: number, pz: number, o: Obstacle, r: number, halfH: number): boolean =>
+  py > o.pos[1] - o.halfSize[1] - halfH &&
+  py < o.pos[1] + o.halfSize[1] + halfH &&
+  pz > o.pos[2] - o.halfSize[2] - r &&
+  pz < o.pos[2] + o.halfSize[2] + r;
+
+const overlapsXY = (px: number, py: number, o: Obstacle, r: number, halfH: number): boolean =>
+  px > o.pos[0] - o.halfSize[0] - r &&
+  px < o.pos[0] + o.halfSize[0] + r &&
+  py > o.pos[1] - o.halfSize[1] - halfH &&
+  py < o.pos[1] + o.halfSize[1] + halfH;
+
+const overlapsXZ = (px: number, pz: number, o: Obstacle, r: number): boolean =>
+  px > o.pos[0] - o.halfSize[0] - r &&
+  px < o.pos[0] + o.halfSize[0] + r &&
+  pz > o.pos[2] - o.halfSize[2] - r &&
+  pz < o.pos[2] + o.halfSize[2] + r;
 
 const clamp = (v: number, lo: number, hi: number): number =>
   v < lo ? lo : v > hi ? hi : v;

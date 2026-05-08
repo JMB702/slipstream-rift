@@ -1,16 +1,7 @@
-import { MAP } from '@slipstream/shared';
+import { MAP, OBSTACLES } from '@slipstream/shared';
 
 export const Arena = () => {
   const half = MAP.size / 2;
-  const obstacles: { pos: [number, number, number]; size: [number, number, number] }[] = [
-    { pos: [-12, 1, -8], size: [4, 2, 4] },
-    { pos: [10, 1, -10], size: [3, 2, 6] },
-    { pos: [0, 1.5, 0], size: [6, 3, 2] },
-    { pos: [-15, 0.5, 12], size: [8, 1, 3] },
-    { pos: [14, 2, 8], size: [3, 4, 3] },
-    { pos: [6, 1, 14], size: [4, 2, 4] },
-    { pos: [-6, 0.75, -16], size: [6, 1.5, 2] },
-  ];
 
   return (
     <group>
@@ -31,9 +22,14 @@ export const Arena = () => {
         </mesh>
       ))}
 
-      {obstacles.map((o, i) => (
-        <mesh key={i} position={o.pos} castShadow receiveShadow>
-          <boxGeometry args={o.size} />
+      {OBSTACLES.map((o, i) => (
+        <mesh
+          key={i}
+          position={o.pos as unknown as [number, number, number]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[o.halfSize[0] * 2, o.halfSize[1] * 2, o.halfSize[2] * 2]} />
           <meshStandardMaterial color="#3a4055" />
         </mesh>
       ))}

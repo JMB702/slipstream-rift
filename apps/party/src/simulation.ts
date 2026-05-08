@@ -1,9 +1,11 @@
 import {
+  OBSTACLES,
   PLAYER,
   WEAPON,
   applyMovement,
   type GameEvent,
   type InputFrame,
+  type Obstacle,
   type Vec3,
 } from '@slipstream/shared';
 import type { ServerPlayer } from './state.js';
@@ -97,21 +99,35 @@ export const tryFire = (
   ];
 
   const dir = directionFromYawPitch(shooter.yaw, shooter.pitch);
-  const result = raycastPlayers(eyeOrigin, dir, WEAPON.range, others, shooter.id);
+
+  const playerHit = raycastPlayers(eyeOrigin, dir, WEAPON.range, others, shooter.id);
+  const wallT = raycastObstacles(eyeOrigin, dir, WEAPON.range);
+
+  // Shot is blocked if a wall is closer than the nearest player.
+  const blocked = wallT !== null && (playerHit === null || wallT < playerHit.t);
+  const effectiveHit = blocked ? null : playerHit;
+  const stopT =
+    blocked && wallT !== null
+      ? wallT
+      : effectiveHit !== null
+        ? effectiveHit.t
+        : WEAPON.range;
 
   const events: GameEvent[] = [
     {
       type: 'shot',
       shooterId: shooter.id,
       origin: eyeOrigin,
-      direction: dir,
-      hit: result?.hitId ?? null,
+      // Direction is unit; we encode the effective tracer length by scaling so
+      // the client renders a beam to the impact point, not 80m past the wall.
+      direction: [dir[0] * (stopT / WEAPON.range), dir[1] * (stopT / WEAPON.range), dir[2] * (stopT / WEAPON.range)],
+      hit: effectiveHit?.hitId ?? null,
       at: now,
     },
   ];
 
-  if (result) {
-    const victim = others.find((p) => p.id === result.hitId);
+  if (effectiveHit) {
+    const victim = others.find((p) => p.id === effectiveHit.hitId);
     if (victim && victim.alive) {
       victim.health -= WEAPON.damage;
       if (victim.health <= 0) {
@@ -186,4 +202,41 @@ const raySphere = (
   const t = -b - sq;
   if (t < 0 || t > maxDist) return null;
   return t;
+};
+
+const raycastObstacles = (origin: Vec3, dir: Vec3, maxDist: number): number | null => {
+  let best: number | null = null;
+  for (const o of OBSTACLES) {
+    const t = rayAABB(origin, dir, o, maxDist);
+    if (t !== null && (best === null || t < best)) best = t;
+  }
+  return best;
+};
+
+const rayAABB = (origin: Vec3, dir: Vec3, o: Obstacle, maxDist: number): number | null => {
+  // Slabs method. Returns the t of the entry hit, or null if the ray misses.
+  let tmin = 0;
+  let tmax = maxDist;
+  for (let axis = 0; axis < 3; axis++) {
+    const min = o.pos[axis]! - o.halfSize[axis]!;
+    const max = o.pos[axis]! + o.halfSize[axis]!;
+    const d = dir[axis]!;
+    const oo = origin[axis]!;
+    if (Math.abs(d) < 1e-8) {
+      if (oo < min || oo > max) return null;
+      continue;
+    }
+    const invD = 1 / d;
+    let t1 = (min - oo) * invD;
+    let t2 = (max - oo) * invD;
+    if (t1 > t2) {
+      const tmp = t1;
+      t1 = t2;
+      t2 = tmp;
+    }
+    if (t1 > tmin) tmin = t1;
+    if (t2 < tmax) tmax = t2;
+    if (tmin > tmax) return null;
+  }
+  return tmin;
 };

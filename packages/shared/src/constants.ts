@@ -37,3 +37,22 @@ export const NET = {
   interpolationDelayMs: 100,
   inputBufferMax: 60,
 } as const;
+
+export interface Obstacle {
+  // World-space center of the box.
+  readonly pos: readonly [number, number, number];
+  // Half-extents (full size = 2 * half on each axis).
+  readonly halfSize: readonly [number, number, number];
+}
+
+// Single source of truth for arena geometry. Both the client (rendering) and
+// the server (collision) read from this list.
+export const OBSTACLES: readonly Obstacle[] = [
+  { pos: [-12, 1, -8], halfSize: [2, 1, 2] },
+  { pos: [10, 1, -10], halfSize: [1.5, 1, 3] },
+  { pos: [0, 1.5, 0], halfSize: [3, 1.5, 1] },
+  { pos: [-15, 0.5, 12], halfSize: [4, 0.5, 1.5] },
+  { pos: [14, 2, 8], halfSize: [1.5, 2, 1.5] },
+  { pos: [6, 1, 14], halfSize: [2, 1, 2] },
+  { pos: [-6, 0.75, -16], halfSize: [3, 0.75, 1] },
+];
