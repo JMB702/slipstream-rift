@@ -39,8 +39,10 @@ export const applyMovement = (state: MovableState, input: InputFrame): MovableSt
   let py = state.position[1] + vy * dt;
   let pz = state.position[2] + vz * dt;
 
-  if (py <= PLAYER.radius) {
-    py = PLAYER.radius;
+  // position represents the capsule center; ground-rest is height/2.
+  const floor = PLAYER.height / 2;
+  if (py <= floor) {
+    py = floor;
     vy = 0;
     grounded = true;
   } else {

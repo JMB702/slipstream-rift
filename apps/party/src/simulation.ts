@@ -55,9 +55,10 @@ export const tryFire = (
 
   shooter.ammo -= 1;
 
+  // Eye sits a bit above body center (so muzzle flashes don't come out of the chest).
   const eyeOrigin: Vec3 = [
     shooter.position[0],
-    shooter.position[1] + PLAYER.height * 0.4,
+    shooter.position[1] + PLAYER.height * 0.3,
     shooter.position[2],
   ];
 
@@ -119,9 +120,12 @@ const raycastPlayers = (
   excludeId: string,
 ): RayHit | null => {
   let best: RayHit | null = null;
+  // Approximate the capsule with a fat sphere covering most of the body.
+  // Slightly over-generous laterally but reliable until we add proper capsule tests.
+  const hitRadius = PLAYER.height * 0.4;
   for (const p of targets) {
     if (p.id === excludeId || !p.alive) continue;
-    const t = raySphere(origin, dir, p.position, PLAYER.radius * 1.4, maxDist);
+    const t = raySphere(origin, dir, p.position, hitRadius, maxDist);
     if (t !== null && (best === null || t < best.t)) {
       best = { hitId: p.id, t };
     }
@@ -136,8 +140,9 @@ const raySphere = (
   radius: number,
   maxDist: number,
 ): number | null => {
+  // The target's body sphere is centered at its position (capsule center).
   const ox = origin[0] - center[0];
-  const oy = origin[1] - (center[1] + PLAYER.height * 0.4);
+  const oy = origin[1] - center[1];
   const oz = origin[2] - center[2];
   const b = ox * dir[0] + oy * dir[1] + oz * dir[2];
   const c = ox * ox + oy * oy + oz * oz - radius * radius;

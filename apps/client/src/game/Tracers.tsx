@@ -103,6 +103,7 @@ const findHitPoint = (
   // so use the snapshot position of the hit player if available.
   const lastSnap = useGame.getState().snapshots[useGame.getState().snapshots.length - 1];
   const hit = s.hit ? lastSnap?.players.get(s.hit) : null;
-  if (hit) return [hit.position[0], hit.position[1] + 0.9, hit.position[2]];
+  // hit.position is the body center; pop the flash right there.
+  if (hit) return [hit.position[0], hit.position[1], hit.position[2]];
   return end;
 };

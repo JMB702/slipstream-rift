@@ -38,8 +38,9 @@ export const FollowCamera = () => {
     const rx = cy;
     const rz = -sy;
 
+    // Eye height matches the server's eye for raycasts (position is body center).
     const eyeX = pred.position[0];
-    const eyeY = pred.position[1] + PLAYER.height * 0.55;
+    const eyeY = pred.position[1] + PLAYER.height * 0.3;
     const eyeZ = pred.position[2];
 
     // camera sits behind the player along -forward, lifted, and offset to the right shoulder

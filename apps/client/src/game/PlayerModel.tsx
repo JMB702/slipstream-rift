@@ -12,11 +12,11 @@ export const PlayerModel = ({ name, alive, health, color }: Props) => {
   if (!alive) return null;
   return (
     <group>
-      <mesh castShadow position={[0, PLAYER.height / 2, 0]}>
+      <mesh castShadow>
         <capsuleGeometry args={[PLAYER.radius, PLAYER.height - PLAYER.radius * 2, 8, 16]} />
         <meshStandardMaterial color={color} />
       </mesh>
-      <Billboard position={[0, PLAYER.height + 0.4, 0]}>
+      <Billboard position={[0, PLAYER.height / 2 + 0.4, 0]}>
         <Text fontSize={0.25} color="white" outlineWidth={0.02} outlineColor="black">
           {name}
         </Text>

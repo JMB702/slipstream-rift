@@ -22,7 +22,7 @@ let activeInput: ReturnType<typeof createInput> | null = null;
 export const getActiveInput = (): InputState | null => activeInput?.state ?? null;
 
 const predicted: MovableState = {
-  position: [0, PLAYER.radius, 0],
+  position: [0, PLAYER.height / 2, 0],
   velocity: [0, 0, 0],
   yaw: 0,
   pitch: 0,
@@ -106,7 +106,7 @@ export const LocalPlayer = ({ send, myName }: Props) => {
       velocity: me.velocity,
       yaw: me.yaw,
       pitch: me.pitch,
-      grounded: me.position[1] <= PLAYER.radius + 0.001,
+      grounded: me.position[1] <= PLAYER.height / 2 + 0.001,
     };
     for (const frame of inputBuffer.current) {
       state = applyMovement(state, frame);
