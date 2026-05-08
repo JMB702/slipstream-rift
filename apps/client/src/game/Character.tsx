@@ -190,11 +190,11 @@ export const Character = ({ velocity, alive, playerId }: Props) => {
 
   if (!alive) return null;
 
-  // Soldier.glb origin is at the feet; our player position is the capsule
-  // center, so push the model down by half-height. The model's local forward
-  // is already -z (matching our world's forward at yaw=0).
+  // Mixamo character: origin at feet, native forward is +z. Our world has
+  // forward = -z at yaw=0, so we apply a 180° y rotation to align them.
+  // The position offset pushes feet to ground (player position is capsule center).
   return (
-    <group position={[0, -PLAYER.height / 2, 0]}>
+    <group position={[0, -PLAYER.height / 2, 0]} rotation={[0, Math.PI, 0]}>
       <primitive object={cloned} />
     </group>
   );
