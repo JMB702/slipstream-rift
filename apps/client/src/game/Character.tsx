@@ -9,9 +9,11 @@ import {
   Group,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   Quaternion,
+  SphereGeometry,
   Vector3,
   type AnimationAction,
 } from 'three';
@@ -119,6 +121,8 @@ export const Character = ({ velocity, alive, playerId }: Props) => {
   const fireTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seenEventsRef = useRef(0);
 
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     return useGame.subscribe((state) => {
       if (!playerId) return;
@@ -130,9 +134,21 @@ export const Character = ({ velocity, alive, playerId }: Props) => {
         if (ev.type === 'shot' && ev.shooterId === playerId) firedThisBatch = true;
       }
       if (!firedThisBatch) return;
+
       setFiring(true);
       if (fireTimeoutRef.current) clearTimeout(fireTimeoutRef.current);
       fireTimeoutRef.current = setTimeout(() => setFiring(false), FIRE_HOLD_MS);
+
+      // Pop the muzzle flash at the barrel tip.
+      const gun = gunMeshRef.current;
+      const flash = gun?.getObjectByName(MUZZLE_FLASH_NAME);
+      if (flash) {
+        flash.visible = true;
+        if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+        flashTimeoutRef.current = setTimeout(() => {
+          if (flash) flash.visible = false;
+        }, MUZZLE_FLASH_MS);
+      }
     });
   }, [playerId]);
 
@@ -407,5 +423,20 @@ const createRifleMesh = (): Group => {
   sight.position.set(0, 0.13, -0.1);
   gun.add(sight);
 
+  // Muzzle flash — placed at the barrel tip, hidden by default. Toggled on
+  // by Character's shot-event handler. Looked up by name so we don't have
+  // to thread an extra ref through the React tree.
+  const flash = new Mesh(
+    new SphereGeometry(0.06, 12, 12),
+    new MeshBasicMaterial({ color: '#ffd060', transparent: true, opacity: 0.9 }),
+  );
+  flash.position.set(0, 0.09, -0.6);
+  flash.visible = false;
+  flash.name = MUZZLE_FLASH_NAME;
+  gun.add(flash);
+
   return gun;
 };
+
+const MUZZLE_FLASH_NAME = 'muzzleFlash';
+const MUZZLE_FLASH_MS = 60;

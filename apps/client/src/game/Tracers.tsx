@@ -1,22 +1,24 @@
-import { Line } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../store.js';
-import { WEAPON, type ShotEvent, type PlayerId } from '@slipstream/shared';
+import type { ShotEvent } from '@slipstream/shared';
 
-interface ActiveTracer {
+// We used to render an origin sphere at every shot's `origin` (the shooter's
+// eye position) plus a visible tracer line — but the eye sits inside the
+// character model, so the muzzle "flash" appeared inside the chest. Now the
+// muzzle flash is rendered by Character.tsx, anchored to the actual gun
+// barrel. This component only handles the hit flash on the victim.
+
+interface HitFlash {
   id: number;
-  points: [[number, number, number], [number, number, number]];
+  point: [number, number, number];
   bornAt: number;
-  hitId: PlayerId | null;
-  hitPoint: [number, number, number] | null;
 }
 
-const TRACER_LIFE_MS = 250;
 const FLASH_LIFE_MS = 350;
 
 export const Tracers = () => {
-  const [tracers, setTracers] = useState<ActiveTracer[]>([]);
+  const [flashes, setFlashes] = useState<HitFlash[]>([]);
   const idRef = useRef(0);
   const seenRef = useRef(0);
 
@@ -25,34 +27,26 @@ export const Tracers = () => {
       if (state.events.length === seenRef.current) return;
       const fresh = state.events.slice(seenRef.current);
       seenRef.current = state.events.length;
-      const shots = fresh.filter((e): e is ShotEvent => e.type === 'shot');
-      if (shots.length === 0) return;
-      setTracers((cur) => {
+      const hits = fresh.filter(
+        (e): e is ShotEvent => e.type === 'shot' && e.hit !== null,
+      );
+      if (hits.length === 0) return;
+      setFlashes((cur) => {
         const next = [...cur];
-        for (const s of shots) {
-          const len = WEAPON.range;
-          const end: [number, number, number] = [
-            s.origin[0] + s.direction[0] * len,
-            s.origin[1] + s.direction[1] * len,
-            s.origin[2] + s.direction[2] * len,
-          ];
-          next.push({
-            id: idRef.current++,
-            points: [[s.origin[0], s.origin[1], s.origin[2]], end],
-            bornAt: performance.now(),
-            hitId: s.hit,
-            hitPoint: s.hit ? findHitPoint(s, end) : null,
-          });
+        for (const s of hits) {
+          const point = findHitPoint(s);
+          if (!point) continue;
+          next.push({ id: idRef.current++, point, bornAt: performance.now() });
         }
-        return next.slice(-32);
+        return next.slice(-16);
       });
     });
   }, []);
 
   useFrame(() => {
     const now = performance.now();
-    setTracers((cur) => {
-      const filtered = cur.filter((t) => now - t.bornAt < FLASH_LIFE_MS);
+    setFlashes((cur) => {
+      const filtered = cur.filter((f) => now - f.bornAt < FLASH_LIFE_MS);
       return filtered.length === cur.length ? cur : filtered;
     });
   });
@@ -61,49 +55,26 @@ export const Tracers = () => {
 
   return (
     <group>
-      {tracers.map((t) => {
-        const age = now - t.bornAt;
-        const beamAlive = age < TRACER_LIFE_MS;
-        const flashAlive = age < FLASH_LIFE_MS;
-        const beamOpacity = beamAlive ? 1 - age / TRACER_LIFE_MS : 0;
-        const flashScale = 0.25 + (age / FLASH_LIFE_MS) * 0.4;
+      {flashes.map((f) => {
+        const age = now - f.bornAt;
+        const scale = 0.25 + (age / FLASH_LIFE_MS) * 0.4;
+        const opacity = 1 - age / FLASH_LIFE_MS;
         return (
-          <group key={t.id}>
-            {beamAlive && (
-              <Line
-                points={t.points}
-                color="#ffe080"
-                lineWidth={3}
-                transparent
-                opacity={beamOpacity}
-              />
-            )}
-            <mesh position={t.points[0]}>
-              <sphereGeometry args={[0.12, 8, 8]} />
-              <meshBasicMaterial color="#fff5c0" transparent opacity={beamOpacity * 0.9} />
-            </mesh>
-            {t.hitPoint && flashAlive && (
-              <mesh position={t.hitPoint}>
-                <sphereGeometry args={[flashScale, 12, 12]} />
-                <meshBasicMaterial color="#ff7050" transparent opacity={1 - age / FLASH_LIFE_MS} />
-              </mesh>
-            )}
-          </group>
+          <mesh key={f.id} position={f.point}>
+            <sphereGeometry args={[scale, 12, 12]} />
+            <meshBasicMaterial color="#ff7050" transparent opacity={opacity} />
+          </mesh>
         );
       })}
     </group>
   );
 };
 
-const findHitPoint = (
-  s: ShotEvent,
-  end: [number, number, number],
-): [number, number, number] => {
-  // Approximate: client doesn't have authoritative hit distance,
-  // so use the snapshot position of the hit player if available.
+const findHitPoint = (s: ShotEvent): [number, number, number] | null => {
+  // Client doesn't have authoritative hit distance — use the latest snapshot
+  // position of the hit player.
   const lastSnap = useGame.getState().snapshots[useGame.getState().snapshots.length - 1];
   const hit = s.hit ? lastSnap?.players.get(s.hit) : null;
-  // hit.position is the body center; pop the flash right there.
   if (hit) return [hit.position[0], hit.position[1], hit.position[2]];
-  return end;
+  return null;
 };
