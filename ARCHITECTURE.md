@@ -89,6 +89,23 @@ Tick rate (`TICK_HZ`), snapshot rate (`SNAPSHOT_HZ`), and gameplay constants liv
 
 The chat event flow is already wired (`ClientMessage.chat`, server fanout, store ingest). Just add a chat-input component in `ui/` that calls `client.send({ type: 'chat', text })` and renders `useGame((s) => s.chat)`.
 
+### Swap the player character (Mixamo or other GLB)
+
+The current model is `apps/client/public/models/Soldier.glb` (from Three.js examples — public-domain, ships with Idle / Walk / Run / TPose clips). To use a Mixamo character:
+
+1. Sign in at https://www.mixamo.com (free, Adobe account).
+2. Pick a character → **Download** → format **FBX Binary**, **with Skin**, **30 fps**, **No animation**.
+3. Pick animations: **Idle**, **Walking**, **Running**. For each, **Download** → **FBX Binary**, **without Skin**.
+4. Convert the FBX files to a single GLB with embedded animations (the Three.js editor can do this, or use Blender: import all FBX files, name the animation actions `Idle` / `Walk` / `Run`, export as GLB).
+5. Drop the resulting GLB at `apps/client/public/models/Soldier.glb` (replace) or change `MODEL_URL` in `apps/client/src/game/Character.tsx`.
+6. If the new clip names don't match `Idle` / `Walk` / `Run`, update the `clipNames` map in [Character.tsx](apps/client/src/game/Character.tsx).
+
+Other compatible sources: **Ready Player Me** (per-user avatars, Mixamo-skeleton-compatible — perfect for "your-face avatars"), **Quaternius** (free CC0 low-poly characters), **Synty Studios** (paid stylized packs).
+
+Scale: the Character component assumes the model is ~1.8m tall and that its origin sits at the feet. If yours doesn't, add `scale={[s, s, s]}` and tune the `position={[0, -PLAYER.height / 2, 0]}` offset in `Character.tsx`.
+
+Forward direction: most Mixamo / RPM models face -z in their own space, which matches our world's forward at yaw=0 — but Soldier.glb faces +z so Character applies a 180° yaw rotation. If your model points the wrong way after swap, flip the rotation prop on the inner group.
+
 ## Future work
 
 - **Lag compensation.** Server keeps a small history of player positions, raycasts against the position the shooter actually saw (now − their RTT/2 − interpolation delay).

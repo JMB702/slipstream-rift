@@ -1,9 +1,9 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import { Group } from 'three';
-import { NET, type PlayerId, type PlayerState } from '@slipstream/shared';
+import { NET, type PlayerId, type PlayerState, type Vec3 } from '@slipstream/shared';
 import { useGame } from '../store.js';
-import { PlayerModel, colorForId } from './PlayerModel.js';
+import { PlayerModel } from './PlayerModel.js';
 
 interface Props {
   id: PlayerId;
@@ -11,10 +11,16 @@ interface Props {
 
 export const RemotePlayer = ({ id }: Props) => {
   const ref = useRef<Group>(null);
-  const renderState = useRef<{ name: string; alive: boolean; health: number }>({
+  const renderState = useRef<{
+    name: string;
+    alive: boolean;
+    health: number;
+    velocity: Vec3;
+  }>({
     name: '',
     alive: true,
     health: 100,
+    velocity: [0, 0, 0],
   });
 
   useFrame(() => {
@@ -59,6 +65,7 @@ export const RemotePlayer = ({ id }: Props) => {
     renderState.current.name = target.name;
     renderState.current.alive = target.alive;
     renderState.current.health = target.health;
+    renderState.current.velocity = target.velocity;
   });
 
   const initialName = useMemo(() => latestName(id), [id]);
@@ -69,7 +76,7 @@ export const RemotePlayer = ({ id }: Props) => {
         name={renderState.current.name || initialName}
         alive={renderState.current.alive}
         health={renderState.current.health}
-        color={colorForId(id)}
+        velocity={renderState.current.velocity}
       />
     </group>
   );

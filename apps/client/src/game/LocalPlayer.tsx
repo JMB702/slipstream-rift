@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Group } from 'three';
 import {
   PLAYER,
@@ -12,7 +12,7 @@ import {
 import { useGame } from '../store.js';
 import { createInput } from './input.js';
 import { setActiveInput, setPredictedState, consumeFire } from './local-state.js';
-import { PlayerModel, colorForId } from './PlayerModel.js';
+import { PlayerModel } from './PlayerModel.js';
 
 interface Props {
   send(msg: ClientMessage): void;
@@ -38,11 +38,6 @@ export const LocalPlayer = ({ send, myName }: Props) => {
       setActiveInput(null);
     };
   }, [gl]);
-
-  const myColor = useMemo(() => {
-    const id = useGame.getState().myId;
-    return id ? colorForId(id) : '#88aaff';
-  }, []);
 
   useFrame((_, delta) => {
     const dtMs = delta * 1000;
@@ -142,7 +137,7 @@ export const LocalPlayer = ({ send, myName }: Props) => {
         name={me?.name ?? myName}
         alive={me?.alive ?? true}
         health={me?.health ?? 100}
-        color={myColor}
+        velocity={me?.velocity ?? [0, 0, 0]}
       />
     </group>
   );
