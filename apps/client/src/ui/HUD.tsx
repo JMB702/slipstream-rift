@@ -9,7 +9,10 @@ export const HUD = () => {
   const lastSnap = useGame((s) => s.snapshots[s.snapshots.length - 1]);
   const killFeed = useGame((s) => s.killFeed);
   const conn = useGame((s) => s.conn);
+  const killTarget = useGame((s) => s.killTarget);
+  const winnerId = useGame((s) => s.winnerId);
   const me = myId ? lastSnap?.players.get(myId) : undefined;
+  const winner = winnerId ? lastSnap?.players.get(winnerId) : undefined;
 
   // Hit marker: brief X overlay around the crosshair when one of MY shots
   // landed on someone. Subscribed-via-store so we react to shot events as
@@ -65,16 +68,33 @@ export const HUD = () => {
               AMMO {me.ammo}/{WEAPON.magazineSize}
               {me.reloading && ' (reloading...)'}
             </span>
-            <span>K {me.kills}</span>
+            <span>
+              K {me.kills}
+              <span style={{ opacity: 0.5 }}>/{killTarget}</span>
+            </span>
             <span>D {me.deaths}</span>
           </>
         )}
       </div>
 
-      {me && !me.alive && (
+      {me && !me.alive && !winnerId && (
         <div style={deathOverlay}>
           <div style={{ fontSize: 32, fontWeight: 700, marginBottom: 8 }}>You died</div>
           <div style={{ opacity: 0.8 }}>Respawning…</div>
+        </div>
+      )}
+
+      {winnerId && (
+        <div style={victoryOverlay}>
+          <div style={{ fontSize: 18, opacity: 0.8, letterSpacing: 4 }}>
+            {winnerId === myId ? 'VICTORY' : 'GAME OVER'}
+          </div>
+          <div style={{ fontSize: 44, fontWeight: 800, marginTop: 8 }}>
+            {winner?.name ?? 'Someone'} wins
+          </div>
+          <div style={{ marginTop: 6, opacity: 0.7 }}>
+            First to {killTarget} · next round in a few seconds
+          </div>
         </div>
       )}
 
@@ -180,6 +200,19 @@ const deathOverlay: React.CSSProperties = {
   background: 'rgba(40, 0, 0, 0.45)',
   pointerEvents: 'none',
   textAlign: 'center',
+};
+
+const victoryOverlay: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  alignItems: 'center',
+  background: 'rgba(8, 12, 25, 0.7)',
+  pointerEvents: 'none',
+  textAlign: 'center',
+  color: '#e8e8f0',
 };
 
 const killFeedStyle: React.CSSProperties = {

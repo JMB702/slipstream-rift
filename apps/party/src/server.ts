@@ -1,8 +1,11 @@
 import type * as Party from 'partykit/server';
 import {
+  MATCH,
   MAX_PLAYERS,
+  PLAYER,
   SNAPSHOT_MS,
   TICK_MS,
+  WEAPON,
   decode,
   encode,
   type ClientMessage,
@@ -32,6 +35,14 @@ export default class SlipstreamServer implements Party.Server {
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private startedAt = 0;
+  // Match-mode state. killTarget is locked the moment the room first gets
+  // a player (the first joiner picks via ?killTarget=); subsequent joiners
+  // can't change it. Winner+resetAt set together when someone hits the
+  // target; resetAt fires once and clears both, starting a fresh round.
+  private killTarget: number = MATCH.defaultKillTarget;
+  private killTargetLocked = false;
+  private winnerId: string | null = null;
+  private resetAt: number | null = null;
 
   constructor(readonly room: Party.Room) {}
 
@@ -47,6 +58,17 @@ export default class SlipstreamServer implements Party.Server {
     }
     const url = new URL(ctx.request.url);
     const name = (url.searchParams.get('name') ?? 'Player').slice(0, 24) || 'Player';
+    if (!this.killTargetLocked) {
+      const raw = url.searchParams.get('killTarget');
+      const parsed = raw == null ? NaN : Math.floor(Number(raw));
+      if (Number.isFinite(parsed)) {
+        this.killTarget = Math.max(
+          MATCH.minKillTarget,
+          Math.min(MATCH.maxKillTarget, parsed),
+        );
+      }
+      this.killTargetLocked = true;
+    }
     const player = initialPlayer(conn.id, conn.id, name, randomSpawn(), this.serverTime());
     this.players.set(conn.id, player);
 
@@ -88,13 +110,18 @@ export default class SlipstreamServer implements Party.Server {
       }
       case 'input': {
         const now = this.serverTime();
+        const frozen = this.winnerId !== null;
         for (const frame of msg.frames) {
           if (frame.seq <= player.lastSeenSeq) continue;
           // No firing while sprinting — silently demote sprint when fire is
           // pressed. Player walks-while-firing instead of running-while-firing.
           // Reloading at sprint speed is allowed; the client picks ReloadRun.
-          const effectiveFrame =
+          // Also drop fire entirely while the round is in victory-freeze.
+          let effectiveFrame =
             frame.fire && frame.sprint ? { ...frame, sprint: false } : frame;
+          if (frozen && effectiveFrame.fire) {
+            effectiveFrame = { ...effectiveFrame, fire: false };
+          }
           applyInput(player, effectiveFrame, now);
           if (effectiveFrame.fire) this.pendingFire.add(player.id);
         }
@@ -124,6 +151,11 @@ export default class SlipstreamServer implements Party.Server {
     this.pendingFire.delete(conn.id);
     if (this.players.size === 0) {
       this.stopTimers();
+      // Empty room — release the killTarget lock so the next first-joiner
+      // can pick a new target.
+      this.killTargetLocked = false;
+      this.winnerId = null;
+      this.resetAt = null;
     }
   }
 
@@ -144,7 +176,7 @@ export default class SlipstreamServer implements Party.Server {
       integrateIdle(p, now);
     }
 
-    if (this.pendingFire.size > 0) {
+    if (this.winnerId === null && this.pendingFire.size > 0) {
       for (const id of this.pendingFire) {
         const shooter = this.players.get(id);
         if (!shooter) continue;
@@ -152,9 +184,55 @@ export default class SlipstreamServer implements Party.Server {
         if (fired.length > 0) this.events.push(...fired);
       }
       this.pendingFire.clear();
+
+      // Did anyone hit the kill target this tick? Pick the highest-scoring
+      // player as the winner (ties broken by player insertion order).
+      let winner: ServerPlayer | null = null;
+      for (const p of all) {
+        if (p.kills >= this.killTarget && (winner === null || p.kills > winner.kills)) {
+          winner = p;
+        }
+      }
+      if (winner) {
+        this.winnerId = winner.id;
+        this.resetAt = now + MATCH.victoryHoldMs;
+        this.events.push({
+          type: 'gameover',
+          winnerId: winner.id,
+          winnerName: winner.name,
+          killTarget: this.killTarget,
+          at: now,
+        });
+      }
+    } else {
+      this.pendingFire.clear();
+    }
+
+    if (this.resetAt !== null && now >= this.resetAt) {
+      this.resetRound(now, all);
     }
 
     this.tick += 1;
+  }
+
+  private resetRound(now: number, all: ServerPlayer[]): void {
+    for (const p of all) {
+      p.kills = 0;
+      p.deaths = 0;
+      p.health = PLAYER.maxHealth;
+      p.alive = true;
+      p.respawnAt = null;
+      p.position = randomSpawn();
+      p.velocity = [0, 0, 0];
+      p.ammo = WEAPON.magazineSize;
+      p.reloading = false;
+      p.reloadDoneAt = null;
+      p.lastDamagedAt = 0;
+      p.lastIntegratedAt = now;
+      p.grounded = true;
+    }
+    this.winnerId = null;
+    this.resetAt = null;
   }
 
   private broadcastSnapshot(): void {
@@ -164,6 +242,8 @@ export default class SlipstreamServer implements Party.Server {
       serverTime: this.serverTime(),
       tick: this.tick,
       players: Array.from(this.players.values()).map(stripServerOnly),
+      killTarget: this.killTarget,
+      winnerId: this.winnerId,
     };
     this.room.broadcast(encode<ServerMessage>({ type: 'snapshot', snapshot }));
 

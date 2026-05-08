@@ -47,6 +47,14 @@ export const NET = {
   inputBufferMax: 60,
 } as const;
 
+export const MATCH = {
+  defaultKillTarget: 10,
+  minKillTarget: 1,
+  maxKillTarget: 99,
+  // How long the victory overlay stays before the round resets.
+  victoryHoldMs: 5000,
+} as const;
+
 export interface Obstacle {
   // World-space center of the box.
   readonly pos: readonly [number, number, number];

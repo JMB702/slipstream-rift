@@ -11,8 +11,16 @@ export const App = () => {
   const [client, setClient] = useState<NetClient | null>(null);
   const [name, setName] = useState('');
 
-  const onJoin = ({ name, room }: { name: string; room: string }) => {
-    const c = connect(room, name);
+  const onJoin = ({
+    name,
+    room,
+    killTarget,
+  }: {
+    name: string;
+    room: string;
+    killTarget: number;
+  }) => {
+    const c = connect(room, name, killTarget);
     setClient(c);
     setName(name);
   };

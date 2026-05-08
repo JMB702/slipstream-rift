@@ -24,6 +24,10 @@ export interface GameSnapshot {
   serverTime: number;
   tick: number;
   players: PlayerState[];
+  killTarget: number;
+  // When set, the room is in the post-victory freeze before auto-reset.
+  // Client uses this to render the victory overlay.
+  winnerId: PlayerId | null;
 }
 
 export interface KillEvent {
@@ -50,4 +54,12 @@ export interface ChatEvent {
   at: number;
 }
 
-export type GameEvent = KillEvent | ShotEvent | ChatEvent;
+export interface GameOverEvent {
+  type: 'gameover';
+  winnerId: PlayerId;
+  winnerName: string;
+  killTarget: number;
+  at: number;
+}
+
+export type GameEvent = KillEvent | ShotEvent | ChatEvent | GameOverEvent;

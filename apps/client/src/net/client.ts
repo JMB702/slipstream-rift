@@ -7,7 +7,11 @@ import {
 } from '@slipstream/shared';
 import { useGame } from '../store.js';
 
-const HOST = import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
+const urlHost =
+  typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('host')
+    : null;
+const HOST = urlHost || import.meta.env.VITE_PARTYKIT_HOST || 'localhost:1999';
 
 export interface NetClient {
   socket: PartySocket;
@@ -15,15 +19,20 @@ export interface NetClient {
   close(): void;
 }
 
-export const connect = (room: string, name: string): NetClient => {
+export const connect = (room: string, name: string, killTarget?: number): NetClient => {
   const store = useGame.getState();
   store.setConn('connecting');
+
+  const query: Record<string, string> = { name };
+  if (killTarget != null && Number.isFinite(killTarget)) {
+    query.killTarget = String(Math.floor(killTarget));
+  }
 
   const socket = new PartySocket({
     host: HOST,
     room,
     party: 'main',
-    query: { name },
+    query,
   });
 
   socket.addEventListener('open', () => {

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GameEvent, GameSnapshot, PlayerId, PlayerState } from '@slipstream/shared';
+import { MATCH, type GameEvent, type GameSnapshot, type PlayerId, type PlayerState } from '@slipstream/shared';
 
 export type ConnState = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
@@ -17,6 +17,8 @@ interface State {
   events: GameEvent[];
   killFeed: GameEvent[];
   chat: GameEvent[];
+  killTarget: number;
+  winnerId: PlayerId | null;
   setConn(s: ConnState): void;
   setMyId(id: PlayerId): void;
   ingestSnapshot(s: GameSnapshot): void;
@@ -35,6 +37,8 @@ export const useGame = create<State>((set, get) => ({
   events: [],
   killFeed: [],
   chat: [],
+  killTarget: MATCH.defaultKillTarget,
+  winnerId: null,
 
   setConn(s) {
     set({ conn: s });
@@ -54,7 +58,7 @@ export const useGame = create<State>((set, get) => ({
     };
     const snapshots = [...get().snapshots, entry];
     while (snapshots.length > SNAPSHOT_BUFFER) snapshots.shift();
-    set({ snapshots });
+    set({ snapshots, killTarget: s.killTarget, winnerId: s.winnerId });
   },
 
   ingestEvents(events) {
@@ -77,6 +81,8 @@ export const useGame = create<State>((set, get) => ({
       events: [],
       killFeed: [],
       chat: [],
+      killTarget: MATCH.defaultKillTarget,
+      winnerId: null,
     });
   },
 }));

@@ -1,12 +1,14 @@
 import { useState } from 'react';
+import { MATCH } from '@slipstream/shared';
 
 interface Props {
-  onJoin(args: { name: string; room: string }): void;
+  onJoin(args: { name: string; room: string; killTarget: number }): void;
 }
 
 export const Lobby = ({ onJoin }: Props) => {
   const [name, setName] = useState(() => loadName());
   const [room, setRoom] = useState('arena-1');
+  const [killTarget, setKillTarget] = useState<string>(String(MATCH.defaultKillTarget));
 
   return (
     <div style={overlay}>
@@ -34,12 +36,36 @@ export const Lobby = ({ onJoin }: Props) => {
           />
         </label>
 
+        <label style={label}>
+          Kills to win
+          <input
+            style={input}
+            type="number"
+            inputMode="numeric"
+            min={MATCH.minKillTarget}
+            max={MATCH.maxKillTarget}
+            value={killTarget}
+            onChange={(e) => setKillTarget(e.target.value.replace(/[^0-9]/g, ''))}
+          />
+          <span style={hint}>
+            Locked by the first player in the room. {MATCH.minKillTarget}–{MATCH.maxKillTarget}.
+          </span>
+        </label>
+
         <button
           style={button}
           onClick={() => {
             const finalName = name.trim() || 'Player';
             saveName(finalName);
-            onJoin({ name: finalName, room: room.trim() || 'arena-1' });
+            const parsed = Math.floor(Number(killTarget));
+            const target = Number.isFinite(parsed)
+              ? Math.max(MATCH.minKillTarget, Math.min(MATCH.maxKillTarget, parsed))
+              : MATCH.defaultKillTarget;
+            onJoin({
+              name: finalName,
+              room: room.trim() || 'arena-1',
+              killTarget: target,
+            });
           }}
         >
           Drop in
@@ -88,6 +114,14 @@ const input: React.CSSProperties = {
   borderRadius: 4,
   fontSize: 14,
   boxSizing: 'border-box',
+};
+
+const hint: React.CSSProperties = {
+  display: 'block',
+  marginTop: 4,
+  fontSize: 11,
+  opacity: 0.55,
+  fontWeight: 'normal',
 };
 
 const button: React.CSSProperties = {
