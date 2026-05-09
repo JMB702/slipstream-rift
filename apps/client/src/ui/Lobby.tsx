@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MATCH } from '@slipstream/shared';
 import { useGame } from '../store.js';
+import { CLONE_PROMPT } from './clonePrompt.js';
 
 interface Props {
   onJoin(args: { name: string; room: string; killTarget: number; accessCode: string }): void;
@@ -114,8 +115,61 @@ export const Lobby = ({ onJoin }: Props) => {
         <p style={{ opacity: 0.5, fontSize: 12, marginTop: 16 }}>
           WASD move · Shift sprint · Space jump · Mouse aim · Click fire · R reload
         </p>
+
+        <CopyClonePromptButton />
       </div>
     </div>
+  );
+};
+
+const CopyClonePromptButton = () => {
+  const [state, setState] = useState<'idle' | 'copied' | 'error'>('idle');
+  useEffect(() => {
+    if (state === 'idle') return;
+    const t = setTimeout(() => setState('idle'), 2000);
+    return () => clearTimeout(t);
+  }, [state]);
+
+  const onClick = async () => {
+    try {
+      await navigator.clipboard.writeText(CLONE_PROMPT);
+      setState('copied');
+    } catch {
+      // Fallback for older browsers / non-secure contexts.
+      const ta = document.createElement('textarea');
+      ta.value = CLONE_PROMPT;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        setState('copied');
+      } catch {
+        setState('error');
+      } finally {
+        document.body.removeChild(ta);
+      }
+    }
+  };
+
+  const label =
+    state === 'copied' ? 'Copied — paste into your AI coding agent'
+    : state === 'error' ? 'Copy failed — try again'
+    : 'Copy this prompt for your AI coding agent to clone this game';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...cloneButton,
+        borderColor: state === 'copied' ? '#3a6a3a' : state === 'error' ? '#6a1a1a' : '#2a2f4a',
+        color: state === 'copied' ? '#9bff9b' : state === 'error' ? '#ffb0b0' : '#cfd2e0',
+      }}
+    >
+      {label}
+    </button>
   );
 };
 
@@ -162,6 +216,19 @@ const hint: React.CSSProperties = {
   fontSize: 11,
   opacity: 0.55,
   fontWeight: 'normal',
+};
+
+const cloneButton: React.CSSProperties = {
+  marginTop: 14,
+  width: '100%',
+  padding: '8px 10px',
+  background: 'transparent',
+  border: '1px solid #2a2f4a',
+  borderRadius: 4,
+  fontSize: 12,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  transition: 'border-color 200ms linear, color 200ms linear',
 };
 
 const errorStyle: React.CSSProperties = {
