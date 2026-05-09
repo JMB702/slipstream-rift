@@ -2,15 +2,16 @@
 // Designed to drop into a fresh AI coding agent (Claude Code, Cursor, etc.)
 // and set up a collaborative loop: the agent clones, then takes the user's
 // change requests, makes a feature branch, opens a PR back to the upstream
-// repo. When the maintainer merges, the live game updates automatically
-// (Vercel + PartyKit GitHub Action).
+// repo. The maintainer reviews/merges, and separately decides when (and
+// whether) to deploy. There is no auto-deploy on merge — that's the second
+// of two gates protecting the live game.
 //
 // Editing notes:
 // - Plain ASCII; some agents stumble on smart quotes / em dashes when
 //   re-quoting prompts.
 // - Canonical GitHub URL so the agent can verify it.
 // - Don't bake in the live access code — players type that themselves.
-export const CLONE_PROMPT = `You are going to help me ship changes to a live multiplayer game called Slipstream. The repo is public and merges to main auto-deploy. We work as a pair: I describe what I want, you make the change as a pull request.
+export const CLONE_PROMPT = `You are going to help me propose changes to a live multiplayer game called Slipstream. The repo is public; the live game is gated behind code-owner review on the PR plus a manual deploy step that only the maintainer runs. We work as a pair: I describe what I want, you make the change as a pull request, the maintainer decides whether it ships.
 
 Repo: https://github.com/JMB702/slipstream
 Live game: https://slipstream-sand.vercel.app
