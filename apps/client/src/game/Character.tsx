@@ -22,6 +22,7 @@ import {
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { PLAYER, type CharacterId, type PlayerId, type Vec3 } from '@slipstream/shared';
 import { useGame } from '../store.js';
+import { getCameraDist } from './local-state.js';
 import { playGunshot, playHitMarker, playReload } from './sfx.js';
 
 // =============================================================================
@@ -87,6 +88,12 @@ const JUMP_POSE_TIME = 0.35;
 // the character returns to locomotion. If you have a 0.4s Fire clip, set
 // this slightly less so the next shot can re-trigger smoothly.
 const FIRE_HOLD_MS = 350;
+
+// When the camera-to-eye distance drops below this, hide the local skeletal
+// mesh so the character's head/torso doesn't occlude the aim cone. Picked
+// just above ADS framing (1.6m) so ADS reliably triggers the hide; spring-arm
+// collision pull-ins below this threshold also trigger it. Gun stays visible.
+const LOCAL_HIDE_DIST = 1.9;
 
 // Muzzle flash visibility duration per shot (ms). Flash is meant to "pop" —
 // shorter than FIRE_HOLD_MS, which spans the firing animation.
@@ -302,6 +309,18 @@ export const Character = ({ velocity, yaw, reloading, vaulting, alive, playerId,
 
     const flash = gun.getObjectByName('muzzleFlash');
     if (flash) flash.visible = performance.now() < muzzleFlashUntilRef.current;
+
+    // Local-player only: when the spring-arm pulls the camera in tight (ADS,
+    // wall collision, sprint into geometry), the character's head/torso ends
+    // up between the camera and the look ray, occluding the aim cone. Hide
+    // the skeletal mesh below a threshold close to ADS framing distance.
+    // Gun stays visible since it's a sibling of `cloned` inside the wrapper.
+    const myIdNow = useGame.getState().myId;
+    if (playerId && playerId === myIdNow) {
+      cloned.visible = getCameraDist() >= LOCAL_HIDE_DIST;
+    } else if (!cloned.visible) {
+      cloned.visible = true;
+    }
   });
 
   // State machine. Acts only on actual transitions.

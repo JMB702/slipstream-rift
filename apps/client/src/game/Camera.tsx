@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import { PerspectiveCamera } from 'three';
 import { PLAYER, raycastObstacles, type Vec3 } from '@slipstream/shared';
 import { useGame } from '../store.js';
-import { getActiveInput, getPredictedState } from './local-state.js';
+import { getActiveInput, getPredictedState, setCameraDist } from './local-state.js';
 
 // Hipfire (default) framing.
 const HIP_BACK_DIST = 3.4;
@@ -152,6 +152,10 @@ export const FollowCamera = () => {
     // Aim point unchanged: a point far along the look ray from the eye.
     // Pulling the camera in does NOT change where bullets go (server uses yaw/pitch).
     camera.lookAt(eyeX + fx * AIM_DIST, eyeY + fy * AIM_DIST, eyeZ + fz * AIM_DIST);
+
+    // Publish the applied camera distance so the local Character can hide its
+    // body when the camera is close enough that the head occludes the aim cone.
+    setCameraDist(appliedDist.current);
   });
 
   return null;

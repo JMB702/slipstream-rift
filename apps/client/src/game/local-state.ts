@@ -29,3 +29,13 @@ export const setPredictedState = (s: MovableState): void => {
   predicted.pitch = s.pitch;
   predicted.grounded = s.grounded;
 };
+
+// Current applied camera-to-eye distance (after spring-arm collision + ADS
+// damping). The local Character reads this to hide its own body when the
+// camera is close enough that the head/torso would occlude the aim cone.
+// FollowCamera writes once per frame.
+let cameraDist = Infinity;
+export const getCameraDist = (): number => cameraDist;
+export const setCameraDist = (d: number): void => {
+  cameraDist = d;
+};
