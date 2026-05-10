@@ -2,6 +2,10 @@
 
 3D third-person multiplayer arena shooter that runs in the browser. Client deploys to Vercel; multiplayer server is PartyKit (Cloudflare Durable Objects). Server is authoritative — clients send input intent, server simulates.
 
+- **Repo**: https://github.com/JMB702/slipstream (public; PR-gated, code-owner approval required)
+- **Live game**: https://slipstream-sand.vercel.app (4-digit access code in the lobby)
+- **PartyKit prod**: `wss://slipstream.jmb702.partykit.dev`
+
 ## Stack
 
 - **pnpm monorepo**: `apps/client`, `apps/party`, `packages/shared`
@@ -20,23 +24,50 @@ Tick rate 30 Hz, snapshot rate 20 Hz, input rate 30 Hz.
 - **Remote players are time-interpolated** ~100ms behind the latest snapshot. Snapshot buffer is in `useGame.snapshots`.
 - **Wire format**: `ClientMessage` / `ServerMessage` discriminated unions in `packages/shared/src/messages.ts`. Anything that crosses the wire MUST be defined there.
 
+### Hit detection chain (READ THIS BEFORE TOUCHING tryFire)
+
+The fire path looks simple but stacks three load-bearing pieces. They were each added because the user reported them missing in turn — don't simplify by removing one.
+
+1. **Camera-anchored cast** (third-person parallax fix). Each `InputFrame` carries `aimOrigin` (camera world position) and `aim` (camera-resolved hit point in 3D). Server's `tryFire` casts from `aimOrigin` toward `aim`, **not** from the player's eye along yaw/pitch. Reason: the camera sits behind+above the player, so a low ledge in front of the player blocks the EYE's forward ray but not the camera ray. Reticle says clear, eye-cast says blocked, miss. Camera-anchored cast resolves to what the player sees. Bots and frames before the first snapshot pass `null` aim and fall back to eye-from-yaw/pitch.
+
+2. **Vertical capsule hit volume** (matches the visible body). `rayCapsuleVertical` in `packages/shared/src/sim.ts` — cylinder body between `position.y ± (height/2 - radius)` with hemispherical caps of `PLAYER.radius + 0.1` at each end. The old single-sphere-at-center test reached only `[0.18, 1.62]` vertically; head shots from elevation never registered.
+
+3. **Lag-compensated rewind** (so what you saw is what gets hit). Each `ServerPlayer` keeps a 500ms ring of `(serverTime, position)` samples, pushed once per tick after physics settles. `tryFire` rewinds each potential victim to `now - NET.interpolationDelayMs` (linear interp between bracketing samples) before running the capsule test. Without this, a target moving at walk speed (6 m/s) is offset ~0.6m from where the shooter sees them. History clears on respawn so a delayed shot can't tag someone back at their pre-death spot.
+
+The visible tracer in the `shot` event is decoupled from the cast: server splits authoritative cast (`castOrigin = aimOrigin`) from visual event (`origin = eyeOrigin, direction = eye→impact`). Bullet appears to leave the rifle even though the hit logic ran from the camera. Don't merge these — that re-introduces the parallax bug.
+
 ## Where things live
 
 ```
 packages/shared/src/
-  constants.ts   — PLAYER, MAP, WEAPON, NET, OBSTACLES (HOUSE_WALLS + scattered)
-  sim.ts         — applyMovement, rayAABB, raycastObstacles
+  constants.ts   — PLAYER (incl. stepHeight), MAP defaults, WEAPON, NET,
+                   HOUSE_WALLS + SCATTERED_OBSTACLES (used by 'arena' map)
+  maps.ts        — MapDef registry, MAPS, DEFAULT_MAP_ID, isMapId,
+                   setActiveMap / getActiveMap singleton
+  maps/fps_shooter.collision.ts — auto-generated AABBs for the GLTF map
+  sim.ts         — applyMovement (reads getActiveMap obstacles + size),
+                   rayAABB, raycastObstacles
   state.ts       — PlayerState, GameSnapshot, GameEvent
   messages.ts    — wire types + encode/decode
 apps/party/src/
-  server.ts      — Party.Server, tick + snapshot loops, room lifecycle
+  server.ts      — Party.Server, tick + snapshot loops, room lifecycle.
+                   onStart calls setActiveMap(this.room.id) so room id
+                   IS the map id; onConnect rejects mismatched ?mapId=.
   simulation.ts  — applyInput, tryFire, integrateIdle, maybeRespawn
-  state.ts       — ServerPlayer, randomSpawn
+  state.ts       — ServerPlayer, randomSpawn (uses getActiveMap spawnArea)
+  bots/
+    waypoints.ts — getNavGraph(): per-map cache, built from MapDef.waypoints
+    path.ts      — planPath, randomPatrolGoal (defensive on empty graphs)
 apps/client/src/
-  net/client.ts          — PartySocket wrapper, message dispatch
-  store.ts               — Zustand: snapshots, events, conn state
+  net/client.ts          — PartySocket wrapper. Room is the mapId; passes
+                           ?mapId= alongside name/killTarget/etc.
+  store.ts               — Zustand: snapshots, events, conn state, activeMapId
   game/Scene.tsx         — R3F Canvas root
-  game/Map.tsx           — arena geometry, renders OBSTACLES
+  game/Map.tsx           — branches on activeMapId: 'arena' renders
+                           HOUSE_WALLS + SCATTERED_OBSTACLES procedurally;
+                           'fps_shooter' renders <MapGltf>
+  game/MapGltf.tsx       — drei useGLTF wrapper. Per-map URL + scale (must
+                           match SCALE in scripts/extract-map-collision.mjs)
   game/LocalPlayer.tsx   — input loop, prediction, sprint-demote-on-fire
   game/RemotePlayer.tsx  — snapshot interpolation
   game/Camera.tsx        — over-the-shoulder, spring-arm collision
@@ -44,8 +75,37 @@ apps/client/src/
   game/local-state.ts    — singletons for input + predicted state
   game/input.ts          — pointer-lock + WASD + mouse handlers
   game/Tracers.tsx       — bullet tracers from shot events
+  game/sfx.ts            — Web Audio one-shot SFX (gunshot, dry-fire, hit-marker, reload)
+  ui/Lobby.tsx           — Map dropdown (replaces the old Room input)
+  ui/Minimap.tsx         — reads activeMapId + MapDef.obstacles
 public/models/Soldier.glb — Mixamo character + animations (Idle/Walk/Run/Fire/Reload/StrafeL/StrafeR)
+public/audio/             — gunshot, dry-fire, hit-marker, reload (mp3)
+public/maps/fps_shooter/  — GLTF served to the client (scene.gltf + bin + textures)
+scripts/extract-map-collision.mjs — voxelizes Maps/<src>/scene.gltf into
+                                    fps_shooter.collision.ts. Run via
+                                    `pnpm extract:collision`.
 ```
+
+## Maps
+
+Two maps ship today; the lobby dropdown picks one and the server keys its
+PartyKit room by the map id, so different maps live in different rooms.
+
+| id | display | collision | size |
+| --- | --- | --- | --- |
+| `arena` | Original Arena | hand-authored `HOUSE_WALLS` + `SCATTERED_OBSTACLES` in `constants.ts` | 60×60 |
+| `fps_shooter` | FPS Shooter Arena | auto-extracted from `Maps/fps_shooter_game_arena_map_v3/scene.gltf` (voxelized at 0.5m, greedy-merged into ~900 AABBs) | 30×30 |
+
+Default map id: `fps_shooter` (set in `packages/shared/src/maps.ts` as `DEFAULT_MAP_ID`).
+
+**Adding a map:**
+1. Drop the GLTF and textures under `apps/client/public/maps/<id>/`.
+2. If you want collision auto-extracted, add the source GLTF under `Maps/<dir>/`, point `scripts/extract-map-collision.mjs` at it, and run `pnpm extract:collision` to emit `packages/shared/src/maps/<id>.collision.ts`.
+3. Add the new `MapId` literal + `MAPS[id]` entry in `packages/shared/src/maps.ts` (size, spawnArea, spawnHeight, obstacles, waypoints, edges, gltfOffset).
+4. Register the URL + scale in `apps/client/src/game/MapGltf.tsx`. SCALE there must match `SCALE` in `scripts/extract-map-collision.mjs` so collision and visuals line up.
+5. Branch the renderer in `apps/client/src/game/Map.tsx` (procedural arena vs `<MapGltf>`).
+
+**Stair-step:** `PLAYER.stepHeight` (constants.ts) lets `applyMovement` auto-step grounded movement over obstacles up to that tall. Anything taller still needs a jump.
 
 ## Build / dev
 
@@ -57,7 +117,21 @@ pnpm build
 pnpm deploy:party      # PartyKit deploy (requires Adobe-free PartyKit login)
 ```
 
-`vercel.json` at the repo root pins client builds for Vercel. Set `VITE_PARTYKIT_HOST` to the deployed PartyKit host.
+`vercel.json` at the repo root pins client builds for Vercel. `VITE_PARTYKIT_HOST` is set as a Vercel project env var (production scope) pointing at `slipstream.jmb702.partykit.dev`. `apps/party/.env` (gitignored) holds `ACCESS_CODE=<4 digits>` for local dev — the `partykit dev` server reads it on startup.
+
+### Deployment (manual; not auto-on-merge)
+
+Branch protection on `main` requires a code-owner approval before any PR can merge — see `CONTRIBUTING.md` and `.github/CODEOWNERS`. **Merging does NOT trigger a deploy.** The maintainer ships when satisfied with the merged commits:
+
+```
+# Client (Vercel; uses the linked project from `vercel link`)
+vercel --prod
+
+# Server, only when apps/party/ or packages/shared/ changed
+cd apps/party && npx partykit deploy --var ACCESS_CODE=<code>
+```
+
+The two-gate model is intentional: code-owner review gates what merges, the maintainer's manual deploy gates what ships. Don't reconnect Vercel ↔ GitHub auto-deploy without flipping `CONTRIBUTING.md` and `apps/client/src/ui/clonePrompt.ts` to match — the lobby's Copy AI Agent Prompt button hands agents a workflow that explicitly says "do not run deploy commands; the maintainer ships manually."
 
 ## LAN multiplayer testing
 
@@ -98,6 +172,18 @@ These are the things that have eaten hours. Read before changing related code.
 9. **Don't bump GLB version timestamps unless the file changed.** drei caches by URL — adding `?v=${Date.now()}` forces re-downloads of multi-MB files for every player on every reload.
 10. **HMR debt**. After many hot reloads (especially across `Character.tsx`), WebGL contexts get exhausted and Vite's optimizer cache desyncs. If errors look weird and reloads don't help, restart the dev server. Symptoms: Character component throws on mount, `Context Lost` log spam.
 
+11. **PartyKit env on Cloudflare Workers**: read via `this.room.env.X`, NOT `process.env.X`. The Workers runtime doesn't populate `process.env`; `room.env` is the only path that works in both `partykit dev` and prod. The access-code gate failed silently in prod for an entire deploy because of this.
+
+12. **ADS is a presentation flag, not a gameplay flag.** `state.aiming` (RMB or LT) drives camera framing (back-distance / shoulder / FOV lerp) and look-sensitivity scaling only. Don't gate fire rate, damage, or accuracy on it — keep gameplay invariant under aim.
+
+13. **The local character body hides when the camera is within `LOCAL_HIDE_DIST` (1.9m).** Spring-arm collision and ADS framing both pull the camera that close. Without the hide, the player's own head occludes the aim cone. The gun stays visible because it's a sibling of the cloned mesh inside the wrapper group, not a child.
+
+14. **Shot/hit-marker subscribers must gate on event timestamp, not array length.** The store caps `events` at 200; once full, length stays pinned and length-based comparison silently no-ops every subscriber forever (~25s into a session). HUD hit-marker and Character muzzle-flash both use a `lastAtRef` of the highest-seen `ev.at` instead.
+
+15. **`pendingFire` is a `Map<id, aim|null>`, not a Set.** The aim travels with the fire press from input dispatch into the next tick's `tryFire`, so the server fires from the camera state at the moment of the click — not the most recent yaw/pitch (which can drift between press and tick).
+
+16. **Sister `.claude/worktrees/` are a reversion vector.** Concurrent agent sessions in sister worktrees can check files out into the main directory and clobber uncommitted work. If the same edits keep being undone, check `git worktree list` and remove stale worktrees: `git worktree remove --force .claude/worktrees/<name>` + `git branch -D claude/<name>`. Commit aggressively to lock work in.
+
 ## Conventions
 
 - **Wire types only** in `@slipstream/shared`. Server `ServerPlayer` extends `PlayerState` privately; the public wire shape is `PlayerState`.
@@ -128,22 +214,40 @@ To swap or add animations:
 
 `Animations/`, `Characters/`, and `*.fbx` are gitignored — keep sources local, only the merged Soldier.glb ships.
 
+## Audio
+
+`apps/client/src/game/sfx.ts` — Web Audio singleton. Lazy `AudioContext` (browser autoplay policy: created on first `play*()` call, which always lands inside a user-gesture call stack via pointer-lock + click). One shared cache of decoded `AudioBuffer`s; each play allocates a fresh `AudioBufferSourceNode` so overlap works.
+
+- **Gunshot**: triggered for every `shot` event in `Character.tsx` (subscriber runs once per character; each fires for its own `playerId` only, so own + remote shots all play uniformly). Distance-attenuated — gain falls linearly to a floor at `GUNSHOT_MAX_DIST` (60m). Camera position resolved via `useThree(s => s.camera)`.
+- **Dry-click**: triggered in `LocalPlayer.tsx` when `consumeFire()` is true with `meNow.alive && meNow.ammo <= 0`. Server silently ignores no-ammo fires (`tryFire` early-returns), so this is a pure client-side feedback; the local player already knows ammo from the snapshot.
+- **Hit-marker**: same `Character.tsx` shot subscriber, gated on `playerId === myId && ev.hit !== null`. Non-spatial (it's UI feedback). The mp3 has ~217ms of leading silence before the impact transient — `findOnset()` scans for the first sample at ≥10% of peak amplitude (cached per URL) and `src.start(0, offset)` skips the lead-in so the impact lands with the gunshot.
+- **Reload**: triggered by a `useEffect` in `Character.tsx` watching the `reloading` prop for a `false → true` transition; looks up the player's position from the latest snapshot for distance attenuation. Tighter falloff than gunshot (`RELOAD_MAX_DIST = 25`) — only audible to nearby enemies as a tactical cue. Audio is 2.0s, server `WEAPON.reloadMs` is 1500ms; the tail plays past reload completion (intentional, no truncation).
+
+Volume constants live at the top of `sfx.ts`. Source SFX live in `Audio/SFX/` (not committed); the in-game files are 1:1 copies in `public/audio/`.
+
+## Known issues
+
+- **Shots from elevation get blocked above the visible wall on `fps_shooter`.** The hit-detection chain (camera-anchored cast + capsule + lag-comp rewind) all behave correctly when validated in isolation. The problem is geometry data: `OBSTACLES` collision AABBs for some elevated platforms appear to extend higher than the rendered wall geometry. Standing behind cover at the top of the multi-level map and aiming down at someone — reticle is on the target, server's `raycastObstacles` from the camera origin still hits an invisible AABB above the visible top edge, shot returns blocked, no hit marker. From above the cover (jumping onto the ledge instead of behind it) the rate improves but isn't perfect. **Don't try to fix in `tryFire`** — the cast is correct; the geometry data is wrong. Fix path: audit the AABBs emitted by `scripts/extract-map-collision.mjs` for `fps_shooter` against the visible mesh top edges. The voxelizer's greedy merge step is the most likely culprit (it can extend an AABB upward past the mesh top when the cell above is also "solid" by the conservative voxelization). Compare voxel cell tops to actual mesh `boundingBox.max.y` per merged region and clamp.
+
 ## State of the art (open polish items)
 
 Things that are wired but not yet polished. Pick these up in order of player-visibility.
 
+- **Audit obstacle Y-bounds for `fps_shooter`** (see Known issues above). Highest-impact gameplay fix outstanding.
+- **RTT-component lag compensation.** Today's rewind covers `NET.interpolationDelayMs` only; not per-client RTT/2. Adding it requires a client ping loop (none exists today — the `ping`/`pong` wire types are defined but no code sends pings), an RTT estimator on the client, and a new `rtt` field on `InputFrame` so the server can rewind by `now - interpolationDelayMs - rtt/2`.
 - **Reload state**: clip exists in GLB, R-key sends `input.reload`, server runs `WEAPON.reloadMs` timer, but state machine never enters Reload (no event triggers it). Need to wire a "reload started" event from server.
-- **Strafe**: `StrafeL` / `StrafeR` clips exist; state machine doesn't pick them. Would need direction-aware locomotion (sideways velocity > forward velocity → Strafe).
-- **Real Jump clip**: `Jump` state currently maps to `Run` frozen mid-stride (`JUMP_POSE_TIME = 0.35`). Replace with a Mixamo `Jump` clip and remove the freeze code in `applyClipMode`.
+- **Real Jump clip**: `Jump` state currently maps to `RunF` frozen mid-stride (`JUMP_POSE_TIME = 0.35`). Replace with a Mixamo `Jump` clip and remove the freeze code in `applyClipMode`.
 - **Gun tracks hand rotation**: gun follows hand position but its rotation is fixed at `[0, π, 0]`. Need to extract rotation from `bone.matrixWorld` after scale-normalization.
-- **Lag compensation**: server raycasts hits against current positions; should rewind to time = `now - shooter.RTT/2 - interpolationDelay`.
-- **Muzzle flash + recoil on the held gun**: was wired in an earlier iteration with the floating gun, removed during the bone-attached rewrite. Re-add in `Character.tsx`'s `useFrame` after the gun position update.
-- **Multi-character**: `Ch35_nonPBR.fbx` is downloaded but unused. Need character-id-per-player in the wire format.
+- **Multi-character UI**: `Ch35.glb` ships and the wire format carries `characterId`, but the lobby has no character picker.
+- **Strafe clips**: `StrafeL` / `StrafeR` exist but aren't picked by the locomotion state machine (it uses 8-direction `WalkX`/`RunX` instead). Either wire strafe or delete the unused clips.
 
 ## What NOT to do
 
-- Don't commit `Animations/` or `Characters/` source FBX files — gitignored, they're 100s of MB.
-- Don't run destructive git operations (`reset --hard`, `push --force`) without explicit user authorization.
+- Don't push directly to `main`. Branch protection requires a code-owner approval on every PR. Even the maintainer goes through PRs in normal cases.
+- Don't add auto-deploy on merge. The two-gate model (PR review + manual deploy) is intentional. If you change this, update `CONTRIBUTING.md` and `apps/client/src/ui/clonePrompt.ts` to match.
+- Don't merge the authoritative cast and the visible tracer in `tryFire`. They look duplicative and aren't — splitting them is the only way the shot can come from the camera while the bullet appears to come from the gun.
+- Don't commit `Animations/`, `Characters/`, `Audio/`, `Maps/`, or `apps/party/.env` — gitignored. Source files run hundreds of MB and `.env` carries the access code.
+- Don't run destructive git operations (`reset --hard`, `push --force`, `worktree remove --force`) without explicit user authorization.
 - Don't add features beyond what was asked. Bug fixes don't need surrounding cleanup; one-shot operations don't need helpers.
 - Don't add comments narrating what the code does. Names + tests do that.
 - Don't introduce backwards-compat shims for code paths the user is fine changing.
