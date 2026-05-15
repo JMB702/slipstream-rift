@@ -1,10 +1,10 @@
 import type * as Party from 'partykit/server';
 import {
-  BOT,
   BOT_PROFILES,
   DEFAULT_MAP_ID,
   MATCH,
   MAX_PLAYERS,
+  NPCS,
   PLAYER,
   SNAPSHOT_MS,
   TICK_MS,
@@ -13,11 +13,13 @@ import {
   encode,
   isBotDifficulty,
   isMapId,
+  npcById,
   setActiveMap,
   type BotDifficulty,
   type ClientMessage,
   type GameEvent,
   type GameSnapshot,
+  type NpcDef,
   type ServerMessage,
   type Vec3,
 } from '@slipstream-npc/shared';
@@ -256,13 +258,28 @@ export default class SlipstreamServer implements Party.Server {
     let existing = 0;
     for (const p of this.players.values()) if (p.isBot) existing += 1;
     const toAdd = Math.max(0, desired - existing);
-    for (let i = 0; i < toAdd; i++) {
-      const id = `bot-${Math.random().toString(36).slice(2, 9)}`;
-      const name = BOT.names[(existing + i) % BOT.names.length] ?? `Bot${i + 1}`;
-      const bot = initialPlayer(id, id, name, randomSpawn(), now, {
+    // Track which NPC ids are already in the room so we don't double-spawn the
+    // same persona — names key the friendship/transcript graph, so duplicate
+    // names would alias state. With botCount > NPCS.length we run out and
+    // simply spawn fewer bots than requested.
+    const taken = new Set<string>();
+    for (const p of this.players.values()) {
+      if (p.isBot && p.npcId !== undefined) taken.add(p.npcId);
+    }
+    const free: NpcDef[] = NPCS.filter((n) => !taken.has(n.id));
+    const slots = Math.min(toAdd, free.length);
+    for (let i = 0; i < slots; i++) {
+      const def = free[i]!;
+      const id = `bot-${def.id}-${Math.random().toString(36).slice(2, 7)}`;
+      const friendNames = def.startingFriends
+        .map((fid) => npcById(fid)?.name)
+        .filter((n): n is string => typeof n === 'string');
+      const bot = initialPlayer(id, id, def.name, randomSpawn(), now, {
         isBot: true,
         characterId: 'ch35',
       });
+      bot.npcId = def.id;
+      bot.friendsWith = friendNames;
       ensureBotDefaults(bot, now);
       this.players.set(id, bot);
     }

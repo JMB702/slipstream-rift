@@ -21,6 +21,13 @@ export const RemotePlayer = ({ id }: Props) => {
     const last = s.snapshots[s.snapshots.length - 1];
     return last?.players.get(id);
   });
+  const isFriend = useGame((s) => {
+    const last = s.snapshots[s.snapshots.length - 1];
+    const me = s.myId !== null ? last?.players.get(s.myId) : undefined;
+    const them = last?.players.get(id);
+    if (!me || !them) return false;
+    return them.friendsWith.includes(me.name) || me.friendsWith.includes(them.name);
+  });
 
   useFrame(() => {
     const snaps = useGame.getState().snapshots;
@@ -76,6 +83,7 @@ export const RemotePlayer = ({ id }: Props) => {
         vaulting={player.vaulting}
         playerId={id}
         isBot={player.isBot}
+        isFriend={isFriend}
         characterId={player.characterId}
       />
     </group>

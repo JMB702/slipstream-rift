@@ -3,3 +3,4 @@ export * from './state.js';
 export * from './messages.js';
 export * from './sim.js';
 export * from './maps.js';
+export * from './npc-roster.js';

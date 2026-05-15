@@ -20,6 +20,7 @@ interface Props {
   vaulting: boolean;
   playerId: PlayerId | null;
   isBot?: boolean;
+  isFriend?: boolean;
   characterId?: CharacterId;
 }
 
@@ -32,7 +33,7 @@ export const PlayerModel = ({
   reloading,
   vaulting,
   playerId,
-  isBot,
+  isFriend,
   characterId,
 }: Props) => {
   const myId = useGame((s) => s.myId);
@@ -53,7 +54,7 @@ export const PlayerModel = ({
       </Suspense>
       {alive && (
         <Billboard position={[0, PLAYER.height / 2 + 0.35, 0]}>
-          {showsName && <EnemyNameLabel name={isBot ? `BOT ${name}` : name} playerId={playerId} />}
+          {showsName && <EnemyNameLabel name={name} isFriend={!!isFriend} playerId={playerId} />}
           {health < PLAYER.maxHealth && <NameplateHealthBar health={health} />}
         </Billboard>
       )}
@@ -61,10 +62,15 @@ export const PlayerModel = ({
   );
 };
 
-// Reveals the enemy's name on aim, holds it for NAME_REVEAL_HOLD_MS after the
-// local reticle leaves them. Edge-detected re-render so we don't pay React
-// reconciliation cost every frame — only when visibility actually flips.
-const EnemyNameLabel = ({ name, playerId }: { name: string; playerId: PlayerId }) => {
+const EnemyNameLabel = ({
+  name,
+  isFriend,
+  playerId,
+}: {
+  name: string;
+  isFriend: boolean;
+  playerId: PlayerId;
+}) => {
   const [visible, setVisible] = useState(false);
   useFrame(() => {
     const last = getLastAimedAt(playerId);
@@ -72,9 +78,10 @@ const EnemyNameLabel = ({ name, playerId }: { name: string; playerId: PlayerId }
     if (should !== visible) setVisible(should);
   });
   if (!visible) return null;
+  const color = isFriend ? '#5fff8f' : 'white';
   return (
-    <Text fontSize={0.14} color="white" outlineWidth={0.012} outlineColor="black">
-      {name}
+    <Text fontSize={0.14} color={color} outlineWidth={0.012} outlineColor="black">
+      {isFriend ? `● ${name}` : name}
     </Text>
   );
 };
