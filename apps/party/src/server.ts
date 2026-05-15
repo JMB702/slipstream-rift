@@ -175,6 +175,7 @@ export default class SlipstreamServer implements Party.Server {
     });
     this.players.set(conn.id, player);
     this.spawnBots(this.serverTime());
+    void this.hydrateFriendships(player);
 
     // If the room had emptied out, timers were stopped — restart them now.
     this.startTimers();
@@ -344,6 +345,40 @@ export default class SlipstreamServer implements Party.Server {
       bot.friendsWith = friendNames;
       ensureBotDefaults(bot, now);
       this.players.set(id, bot);
+      void this.hydrateBotFriendships(bot);
+    }
+  }
+
+  // For each human currently in the room, check whether this bot's persona
+  // has a persisted friendship score past threshold and add them to the
+  // bot's friendsWith. Also mirrors into the human's friendsWith so the next
+  // snapshot's pip + the social hostility propagation both see it.
+  private async hydrateBotFriendships(bot: ServerPlayer): Promise<void> {
+    if (!bot.npcId) return;
+    const humans = Array.from(this.players.values()).filter((p) => !p.isBot);
+    for (const human of humans) {
+      const f = await this.store.getFriendship(bot.npcId, human.name);
+      if (f.score < SOCIAL.friendThreshold) continue;
+      if (!bot.friendsWith.includes(human.name)) bot.friendsWith.push(human.name);
+      if (!human.friendsWith.includes(bot.name)) human.friendsWith.push(bot.name);
+    }
+  }
+
+  // For each NPC in the roster, check whether this human's persisted
+  // friendship is past threshold and add the NPC name to their friendsWith.
+  // Bots may not be spawned yet at this point — hydrateBotFriendships catches
+  // the reverse direction once they spawn.
+  private async hydrateFriendships(human: ServerPlayer): Promise<void> {
+    for (const npc of NPCS) {
+      const f = await this.store.getFriendship(npc.id, human.name);
+      if (f.score < SOCIAL.friendThreshold) continue;
+      if (!human.friendsWith.includes(npc.name)) human.friendsWith.push(npc.name);
+      const liveBot = Array.from(this.players.values()).find(
+        (p) => p.isBot && p.npcId === npc.id,
+      );
+      if (liveBot && !liveBot.friendsWith.includes(human.name)) {
+        liveBot.friendsWith.push(human.name);
+      }
     }
   }
 
