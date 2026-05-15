@@ -38,14 +38,9 @@ import {
 import { initialPlayer, randomSpawn, type ServerPlayer } from './state.js';
 import { ensureBotDefaults, tickBot } from './bots/controller.js';
 import { pruneHostility } from './social.js';
+import { GameStorage } from './storage.js';
 
 export const CONSENT_VERSION = 'v1';
-const TRANSCRIPT_CAP = 200;
-
-const friendshipKey = (npcId: string, playerName: string): string =>
-  `${npcId}:${playerName}`;
-const transcriptKey = (npcId: string, playerName: string): string =>
-  `${npcId}:${playerName}`;
 
 export default class SlipstreamServer implements Party.Server {
   readonly options: Party.ServerOptions = {
@@ -78,19 +73,18 @@ export default class SlipstreamServer implements Party.Server {
   private botDifficulty: BotDifficulty = MATCH.defaultBotDifficulty;
   private winnerId: string | null = null;
   private resetAt: number | null = null;
-  // Phase 3 in-memory voice state. Promoted to Durable Object storage in
-  // Phase 5; access through these maps via the helpers below so the migration
-  // is mechanical.
-  // Key: player display name (`hello.name`). Value: consent version they
-  // agreed to. Names collide for v1 — documented in CLAUDE.md as a known limit.
-  private consents = new Map<string, { version: string; agreedAt: number }>();
-  // Key: `${npcId}:${playerName}`. Stores recent transcript lines, capped.
-  private transcripts = new Map<string, TranscriptLine[]>();
-  // Key: `${npcId}:${playerName}` → friendship score (0-100). Threshold in
-  // SOCIAL.friendThreshold turns the relationship into a real friendsWith entry.
-  private friendships = new Map<string, number>();
+  // Voice state lives in PartyKit room.storage (Cloudflare Durable Object).
+  // Survives room restarts and reconnects. GameStorage is a thin write-back
+  // cache; reads are cheap once warm, writes go through to disk.
+  private store: GameStorage;
+  // Local cache of "this player has agreed in this connection" — separate
+  // from store.consent so we don't do an async lookup on the hot transcript
+  // path. Cleared on disconnect. The storage record is the source of truth.
+  private liveConsent = new Set<string>();
 
-  constructor(readonly room: Party.Room) {}
+  constructor(readonly room: Party.Room) {
+    this.store = new GameStorage(room.storage);
+  }
 
   onStart(): void {
     this.startedAt = Date.now();
@@ -246,42 +240,34 @@ export default class SlipstreamServer implements Party.Server {
       }
       case 'consent': {
         if (!msg.agreed) return;
-        this.consents.set(player.name, {
+        const playerName = player.name;
+        this.liveConsent.add(playerName);
+        void this.store.setConsent(playerName, {
           version: msg.version,
-          agreedAt: this.serverTime(),
+          agreedAt: Date.now(),
         });
         return;
       }
       case 'voice_session_start': {
-        if (!this.consents.has(player.name)) {
-          this.send(sender, { type: 'consent_required', version: CONSENT_VERSION });
-          return;
-        }
-        const npc = npcById(msg.npcId);
-        if (!npc) return;
-        const friendship = this.friendships.get(friendshipKey(msg.npcId, player.name)) ?? 0;
-        const memoryBlob = this.buildMemoryBlob(npc, player.name);
-        this.send(sender, {
-          type: 'npc_context',
-          npcId: msg.npcId,
-          sessionId: msg.sessionId,
-          memoryBlob,
-          friendship,
-        });
+        void this.handleVoiceSessionStart(player.name, msg.npcId, msg.sessionId, sender);
         return;
       }
       case 'voice_session_end': {
         return;
       }
       case 'transcript': {
-        if (!this.consents.has(player.name)) return;
-        const text = (msg.line.text ?? '').slice(0, 500);
-        if (!text.trim()) return;
-        this.recordTranscript(msg.npcId, player.name, {
-          role: msg.line.role,
-          text,
-          at: msg.line.at,
-        });
+        const playerName = player.name;
+        if (!this.liveConsent.has(playerName)) {
+          // The consent may live in storage from a prior session; check
+          // before dropping. Hot path consent check is fast in cache.
+          void this.store.getConsent(playerName).then((rec) => {
+            if (!rec) return;
+            this.liveConsent.add(playerName);
+            this.acceptTranscript(msg.npcId, playerName, msg.line);
+          });
+          return;
+        }
+        this.acceptTranscript(msg.npcId, playerName, msg.line);
         return;
       }
     }
@@ -480,35 +466,57 @@ export default class SlipstreamServer implements Party.Server {
     conn.send(encode(msg));
   }
 
-  private recordTranscript(npcId: string, playerName: string, line: TranscriptLine): void {
-    const key = transcriptKey(npcId, playerName);
-    const list = this.transcripts.get(key) ?? [];
-    list.push(line);
-    while (list.length > TRANSCRIPT_CAP) list.shift();
-    this.transcripts.set(key, list);
+  private acceptTranscript(npcId: string, playerName: string, line: TranscriptLine): void {
+    const text = (line.text ?? '').slice(0, 500);
+    if (!text.trim()) return;
+    void this.store.appendTranscript(npcId, playerName, {
+      role: line.role,
+      text,
+      at: line.at,
+    });
   }
 
-  private buildMemoryBlob(npc: NpcDef, playerName: string): string {
-    const score = this.friendships.get(friendshipKey(npc.id, playerName)) ?? 0;
-    const ours = this.transcripts.get(transcriptKey(npc.id, playerName)) ?? [];
-    const recentOurs = ours.slice(-10);
-    const cutoff = this.serverTime() - 5 * 60_000;
-    const recentOthers: { name: string; line: TranscriptLine }[] = [];
-    for (const [key, lines] of this.transcripts) {
-      if (!key.startsWith(`${npc.id}:`)) continue;
-      const other = key.slice(npc.id.length + 1);
-      if (other === playerName) continue;
-      for (let i = lines.length - 1; i >= 0; i--) {
-        const l = lines[i]!;
-        if (l.at < cutoff) break;
-        recentOthers.push({ name: other, line: l });
-      }
+  private async handleVoiceSessionStart(
+    playerName: string,
+    npcId: string,
+    sessionId: string,
+    sender: Party.Connection,
+  ): Promise<void> {
+    if (!this.liveConsent.has(playerName)) {
+      const stored = await this.store.getConsent(playerName);
+      if (stored) this.liveConsent.add(playerName);
     }
-    recentOthers.sort((a, b) => a.line.at - b.line.at);
-    const tail = recentOthers.slice(-5);
+    if (!this.liveConsent.has(playerName)) {
+      this.send(sender, { type: 'consent_required', version: CONSENT_VERSION });
+      return;
+    }
+    const npc = npcById(npcId);
+    if (!npc) return;
+    const friendship = (await this.store.getFriendship(npcId, playerName)).score;
+    const memoryBlob = await this.buildMemoryBlob(npc, playerName);
+    this.send(sender, {
+      type: 'npc_context',
+      npcId,
+      sessionId,
+      memoryBlob,
+      friendship,
+    });
+  }
+
+  private async buildMemoryBlob(npc: NpcDef, playerName: string): Promise<string> {
+    const friendship = await this.store.getFriendship(npc.id, playerName);
+    const ours = await this.store.getTranscript(npc.id, playerName);
+    const recentOurs = ours.slice(-10);
+    const cutoff = Date.now() - 5 * 60_000;
+    const others = await this.store.listRecentForNpc(npc.id, playerName, cutoff);
+    others.sort((a, b) => a.line.at - b.line.at);
+    const tail = others.slice(-5);
     const lines: string[] = [];
     lines.push(`You are ${npc.name}. ${npc.personality}`);
-    lines.push(`Friendship score with ${playerName}: ${score} (threshold ${SOCIAL.friendThreshold}).`);
+    lines.push(
+      `Friendship score with ${playerName}: ${friendship.score} (threshold ${SOCIAL.friendThreshold}).` +
+        (friendship.score >= SOCIAL.friendThreshold ? ' They are your friend.' : ''),
+    );
     if (recentOurs.length > 0) {
       lines.push(`Recent conversation with ${playerName}:`);
       for (const l of recentOurs) {
@@ -517,9 +525,9 @@ export default class SlipstreamServer implements Party.Server {
       }
     }
     if (tail.length > 0) {
-      lines.push(`Other players you have spoken with recently:`);
+      lines.push('Other players you have spoken with recently:');
       for (const o of tail) {
-        const who = o.line.role === 'user' ? o.name : npc.name;
+        const who = o.line.role === 'user' ? o.playerName : npc.name;
         lines.push(`  ${who}: ${o.line.text}`);
       }
     }
