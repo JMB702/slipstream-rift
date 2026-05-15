@@ -1,4 +1,4 @@
-import { PLAYER, getActiveMap, type CharacterId, type PlayerState, type Vec3 } from '@slipstream-npc/shared';
+import { PLAYER, getActiveMap, type CharacterId, type HostilityEntry, type PlayerState, type Vec3 } from '@slipstream-npc/shared';
 
 export type BotState = 'patrol' | 'hunt' | 'engage' | 'reposition' | 'dead';
 
@@ -27,6 +27,10 @@ export interface ServerPlayer extends PlayerState {
   // Cleared on respawn so a freshly respawned player can't be hit at their
   // last-life location.
   positionHistory: Array<{ t: number; pos: Vec3 }>;
+  // Per-shooter hostility timers. NPCs only fire on names listed here whose
+  // `until` is in the future. `social.markAttack` pushes entries on confirmed
+  // hits (the victim and every name in victim.friendsWith).
+  hostility: HostilityEntry[];
   // Per-bot controller state. None of these cross the wire — stripped in
   // server.ts before broadcast. All optional so humans pay no extra cost.
   botState?: BotState;
@@ -76,6 +80,7 @@ export const initialPlayer = (
   lastSeenSeq: 0,
   isBot: options?.isBot ?? false,
   characterId: options?.characterId ?? 'soldier',
+  friendsWith: [],
   pendingInputSeq: 0,
   grounded: true,
   lastIntegratedAt: now,
@@ -84,6 +89,7 @@ export const initialPlayer = (
   vaultTo: null,
   vaultEndAt: null,
   positionHistory: [],
+  hostility: [],
 });
 
 export const randomSpawn = (): Vec3 => {

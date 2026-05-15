@@ -336,6 +336,17 @@ export const WINDOWS: readonly WindowDef[] = [
   { axis: 'z', wallCoord: -HOUSE_W, openingCenter: WEST_WINDOW_Z, openingHalfWidth: WIN_HW },
 ];
 
+export const SOCIAL = {
+  hostilityMs: 30_000,
+  friendThreshold: 50,
+  friendBoost: 50,
+} as const;
+
+export const NPC_VOICE = {
+  radius: 5,
+  hysteresis: 0.5,
+} as const;
+
 export const VAULT = {
   // Max distance from the wall plane to trigger a vault. Tight so the player
   // has to be right at the window — not 1.4m away.

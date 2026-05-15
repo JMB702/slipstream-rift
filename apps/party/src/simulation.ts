@@ -16,6 +16,7 @@ import {
 } from '@slipstream-npc/shared';
 import type { ServerPlayer } from './state.js';
 import { randomSpawn } from './state.js';
+import { markAttack } from './social.js';
 
 export const applyInput = (player: ServerPlayer, input: InputFrame, now: number): void => {
   if (!player.alive) {
@@ -369,6 +370,7 @@ export const tryFire = (
     if (victim && victim.alive) {
       victim.health -= WEAPON.damage;
       victim.lastDamagedAt = now;
+      markAttack(shooter.name, victim, [shooter, ...others], now);
       if (victim.health <= 0) {
         victim.health = 0;
         victim.alive = false;

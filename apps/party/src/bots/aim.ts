@@ -1,5 +1,6 @@
 import { PLAYER, raycastObstacles, type Vec3 } from '@slipstream-npc/shared';
 import type { ServerPlayer } from '../state.js';
+import { isHostileTo } from '../social.js';
 
 // Eye height for aim-origin: matches client (apps/client/src/game/aim-state.ts)
 // and server tryFire (apps/party/src/simulation.ts).
@@ -41,19 +42,22 @@ export const hasLineOfSight = (from: Vec3, to: Vec3): boolean => {
   return t === null;
 };
 
-// Closest live enemy with clear LOS, within `maxRange`. Excludes self and any
-// id in `excludeIds` (lets the bot avoid targeting its own kind if you want
-// FFA bot-vs-bot off; default is FFA — bots target each other and humans).
+// Closest live HOSTILE enemy with clear LOS, within `maxRange`. Hostility is
+// shooter-keyed (markAttack writes it on confirmed hits) and time-decayed
+// (SOCIAL.hostilityMs). Peaceful NPCs never enter engage state — this returns
+// null for them until someone shoots first.
 export const findVisibleTarget = (
   shooter: ServerPlayer,
   others: readonly ServerPlayer[],
   maxRange: number,
+  now: number,
 ): ServerPlayer | null => {
   const eye = eyePosition(shooter);
   let best: ServerPlayer | null = null;
   let bestDist = Infinity;
   for (const t of others) {
     if (t.id === shooter.id || !t.alive) continue;
+    if (!isHostileTo(shooter, t.name, now)) continue;
     const dx = t.position[0] - shooter.position[0];
     const dy = t.position[1] - shooter.position[1];
     const dz = t.position[2] - shooter.position[2];

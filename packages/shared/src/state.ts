@@ -23,6 +23,13 @@ export interface PlayerState {
   lastSeenSeq: number;
   isBot: boolean;
   characterId: CharacterId;
+  npcId?: string;
+  friendsWith: string[];
+}
+
+export interface HostilityEntry {
+  towardsName: string;
+  until: number;
 }
 
 export interface GameSnapshot {

@@ -135,7 +135,7 @@ export const tickBot = (
 
   let target: ServerPlayer | null = null;
   if (targetCheckDue) {
-    target = findVisibleTarget(bot, others, profile.fireRangeMax);
+    target = findVisibleTarget(bot, others, profile.fireRangeMax, now);
     bot.botLastTargetCheckAt = now;
     bot.botTargetId = target?.id ?? bot.botTargetId ?? null;
   } else if (bot.botTargetId) {

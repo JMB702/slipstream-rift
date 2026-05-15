@@ -33,6 +33,7 @@ import {
 } from './simulation.js';
 import { initialPlayer, randomSpawn, type ServerPlayer } from './state.js';
 import { ensureBotDefaults, tickBot } from './bots/controller.js';
+import { pruneHostility } from './social.js';
 
 export default class SlipstreamServer implements Party.Server {
   readonly options: Party.ServerOptions = {
@@ -288,6 +289,7 @@ export default class SlipstreamServer implements Party.Server {
       finishReload(p, now);
       maybeRespawn(p, now);
       regenHealth(p, now);
+      pruneHostility(p, now);
       // Vault tween (if any) drives position; must run before integrateIdle
       // since integrateIdle is no-op while vaulting and we want position fresh.
       tickVault(p, now);
@@ -435,4 +437,6 @@ const stripServerOnly = (p: ServerPlayer) => ({
   lastSeenSeq: p.lastSeenSeq,
   isBot: p.isBot,
   characterId: p.characterId,
+  npcId: p.npcId,
+  friendsWith: p.friendsWith,
 });
