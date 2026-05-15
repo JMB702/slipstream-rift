@@ -113,6 +113,12 @@ export const handleConsentRequired = (): void => {
 
 let lastReportedClosestId: string | null = null;
 let lastReportedDist = -1;
+// Auto-fallback flag: once we observe an instant disconnect with a voiceId
+// override (connecting → connected → ended within ~1.5s, no mode transition),
+// we assume the agent's "Voice" override toggle is disabled in the dashboard
+// and stop sending voiceId until the page is reloaded. Without this we'd
+// silently kill every session against a misconfigured agent.
+let suppressVoiceOverride = false;
 
 export const tickVoiceProximity = (selfPos: Vec3): void => {
   if (!deps) return;
@@ -218,6 +224,22 @@ const startSession = async (npcId: string): Promise<void> => {
     starting = false;
     return;
   }
+  // Voice follows the bot's current character MODEL. Roster.voiceId, if set,
+  // overrides the per-character map. If we've previously hit an instant
+  // override-rejection this page-session, fall back to the dashboard default.
+  const lastSnap = useGame.getState().snapshots.slice(-1)[0];
+  const liveBot = lastSnap
+    ? Array.from(lastSnap.players.values()).find((p) => p.isBot && p.npcId === npcId)
+    : undefined;
+  const characterVoice = liveBot ? voiceForCharacter(liveBot.characterId) : undefined;
+  const resolvedVoice = suppressVoiceOverride ? undefined : npc.voiceId ?? characterVoice;
+  const sentVoiceId = resolvedVoice !== undefined;
+
+  // Track this session's lifecycle so we can detect an "instant disconnect
+  // after connected with no audio activity" — the symptom of an unauthorized
+  // override (currently usually: the Voice toggle in the dashboard is off).
+  let connectedAt = 0;
+  let modeChanged = false;
   const session = new ConvAISession(npc, deps.myName, sessionId, {
     onTranscript: (line) => {
       deps?.send({ type: 'transcript', npcId, sessionId, line });
@@ -226,29 +248,35 @@ const startSession = async (npcId: string): Promise<void> => {
     onStatusChange: (status) => {
       console.log(`[voice] session ${npcId} status -> ${status}`);
       useGame.getState().setVoiceSessionStatus(status);
-      if (status === 'error') {
-        useGame.getState().setVoiceLastError('SDK reported error — see console');
-      } else if (status === 'connected') {
+      if (status === 'connected') {
+        connectedAt = Date.now();
         useGame.getState().setVoiceLastError(null);
+      } else if (status === 'error') {
+        useGame.getState().setVoiceLastError('SDK reported error — see console');
+      } else if (status === 'ended' && connectedAt > 0) {
+        const lifetimeMs = Date.now() - connectedAt;
+        if (lifetimeMs < 1500 && !modeChanged && sentVoiceId) {
+          suppressVoiceOverride = true;
+          console.warn(
+            `[voice] session ${npcId} died ${lifetimeMs}ms after connect with no audio. ` +
+              `Treating as a Voice-override rejection — falling back to dashboard default voice ` +
+              `for the rest of this page session. To use per-character voices, toggle "Voice" ON ` +
+              `in the agent's Security tab → Overrides and republish.`,
+          );
+          useGame.getState().setVoiceLastError(
+            'Voice override rejected — enable Voice in agent Security tab',
+          );
+        }
       }
     },
     onModeChange: (mode) => {
       console.log(`[voice] session ${npcId} mode -> ${mode}`);
+      modeChanged = true;
       useGame.getState().setVoiceMode(mode);
     },
   });
   active = session;
   useGame.getState().setActiveVoiceSession({ npcId, sessionId, npcName: npc.name });
-  // Voice follows the bot's current character MODEL, not the NPC persona —
-  // Mira might be Eve in this match and Maria in the next; the body model
-  // is what determines the voice the player hears. Roster.voiceId, if set,
-  // overrides everything (handy for hand-tuned per-NPC voices later).
-  const lastSnap = useGame.getState().snapshots.slice(-1)[0];
-  const liveBot = lastSnap
-    ? Array.from(lastSnap.players.values()).find((p) => p.isBot && p.npcId === npcId)
-    : undefined;
-  const characterVoice = liveBot ? voiceForCharacter(liveBot.characterId) : undefined;
-  const resolvedVoice = npc.voiceId ?? characterVoice;
   await session.start({
     ...(ctxMsg.agentId ? { agentId: ctxMsg.agentId } : {}),
     ...(ctxMsg.signedUrl ? { signedUrl: ctxMsg.signedUrl } : {}),

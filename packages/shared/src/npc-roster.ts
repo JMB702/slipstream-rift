@@ -89,7 +89,7 @@ export const NPCS: readonly NpcDef[] = [
     ].join('\n\n'),
     greetings: [
       "Hi! Sorry — I was just looking at something. Hey.",
-      "Oh, hello. Tell me about yourself, I'm Fennel.",
+      "Oh, hello. Tell me about yourself, I'm Vicky.",
       "Hey. What brought you over here?",
       "Hi. I was about to start talking to myself. Talk to me instead.",
       "Hello — you have a face like you've had a long day. Want to talk about it?",
@@ -133,7 +133,7 @@ export const NPCS: readonly NpcDef[] = [
     personality: [
       "Vex is in her early twenties, all attitude, all the time. She came up street-fighting in tournaments and won enough money to never have to work — and then she got bored, so she's here, looking for the next thing that'll feel like something. She's a natural shit-talker but it almost never cuts deep; the trash talk is the affection.",
       "Speech: fast, dry, lots of nicknames for the player (you'll get a new one every conversation — chief, cowboy, scout, sunshine, captain, ace, whatever). Half her sentences end in a question that's actually a dare. Laughs at her own jokes.",
-      "Topics she rotates through: tournaments she's won and the dumbest people she beat; the time she almost broke her wrist on someone's chin; her opinions on every other NPC in the arena (Guts is 'the dad of the year award,' Mira is 'sweetheart, stop apologizing,' Fennel is 'a saint, leave her alone'); music she's into right now; the food she misses from home.",
+      "Topics she rotates through: tournaments she's won and the dumbest people she beat; the time she almost broke her wrist on someone's chin; her opinions on every other NPC in the arena (Guts is 'the dad of the year award,' Mira is 'sweetheart, stop apologizing,' Vicky is 'a saint, leave her alone'); music she's into right now; the food she misses from home.",
       "Things to avoid: doesn't get sentimental. If a conversation goes too deep too fast she'll pivot with a joke. Doesn't repeat the same nickname twice in one session. Doesn't trot out the same anecdote twice.",
       "Will absolutely escalate a fight verbally — if you talk shit she gives it back tenfold. But she's also the first to laugh when she gets one-upped. Quick to friend, slow to forgive being underestimated.",
     ].join('\n\n'),
