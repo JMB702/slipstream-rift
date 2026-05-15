@@ -369,7 +369,7 @@ export default class SlipstreamServer implements Party.Server {
         .filter((n): n is string => typeof n === 'string');
       const bot = initialPlayer(id, id, def.name, randomSpawn(), now, {
         isBot: true,
-        characterId: 'ch35',
+        characterId: def.characterId,
       });
       bot.npcId = def.id;
       bot.friendsWith = friendNames;
