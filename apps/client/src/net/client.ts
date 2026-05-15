@@ -8,6 +8,7 @@ import {
   type ServerMessage,
 } from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
+import { handleConsentRequired, handleNpcContext } from '../voice/manager.js';
 
 const urlHost =
   typeof window !== 'undefined'
@@ -56,6 +57,20 @@ export const connect = (
 
   socket.addEventListener('open', () => {
     useGame.getState().setConn('connected');
+    // Forward stored consent so the server can record it for this session.
+    // The consent gate runs before the lobby, so this is always populated by
+    // the time we get here; the server uses it to gate voice_session_start.
+    try {
+      const raw = localStorage.getItem('slipstream-npc:consent');
+      if (raw) {
+        const parsed = JSON.parse(raw) as { version: string };
+        socket.send(
+          encode<ClientMessage>({ type: 'consent', agreed: true, version: parsed.version }),
+        );
+      }
+    } catch {
+      // ignore
+    }
   });
 
   socket.addEventListener('close', (event) => {
@@ -93,6 +108,12 @@ export const connect = (
         s.ingestEvents(msg.events);
         return;
       case 'pong':
+        return;
+      case 'npc_context':
+        handleNpcContext(msg);
+        return;
+      case 'consent_required':
+        handleConsentRequired();
         return;
     }
   });

@@ -7,7 +7,16 @@ import {
   type MapId,
   type PlayerId,
   type PlayerState,
+  type TranscriptLine,
 } from '@slipstream-npc/shared';
+
+export interface ActiveVoiceSession {
+  npcId: string;
+  npcName: string;
+  sessionId: string;
+}
+
+export type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'ended' | 'error';
 
 export type ConnState = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
@@ -28,15 +37,19 @@ interface State {
   killTarget: number;
   winnerId: PlayerId | null;
   activeMapId: MapId;
-  // Reason from the most recent socket close, surfaced in the Lobby.
-  // Cleared when the user starts another join attempt.
   lastCloseReason: string | null;
+  activeVoiceSession: ActiveVoiceSession | null;
+  voiceStatus: VoiceStatus;
+  voiceTranscripts: { npcId: string; sessionId: string; line: TranscriptLine }[];
   setConn(s: ConnState): void;
   setCloseReason(r: string | null): void;
   setMyId(id: PlayerId): void;
   setActiveMapId(id: MapId): void;
   ingestSnapshot(s: GameSnapshot): void;
   ingestEvents(e: GameEvent[]): void;
+  setActiveVoiceSession(s: ActiveVoiceSession | null): void;
+  setVoiceSessionStatus(s: VoiceStatus): void;
+  pushTranscript(t: { npcId: string; sessionId: string; line: TranscriptLine }): void;
   reset(): void;
 }
 
@@ -65,6 +78,9 @@ export const useGame = create<State>((set, get) => ({
   winnerId: null,
   activeMapId: DEFAULT_MAP_ID,
   lastCloseReason: null,
+  activeVoiceSession: null,
+  voiceStatus: 'idle',
+  voiceTranscripts: [],
 
   setConn(s) {
     set({ conn: s });
@@ -106,6 +122,20 @@ export const useGame = create<State>((set, get) => ({
     });
   },
 
+  setActiveVoiceSession(s) {
+    set({ activeVoiceSession: s, voiceStatus: s ? 'connecting' : 'idle' });
+  },
+
+  setVoiceSessionStatus(s) {
+    set({ voiceStatus: s });
+  },
+
+  pushTranscript(t) {
+    set((state) => ({
+      voiceTranscripts: [...state.voiceTranscripts, t].slice(-200),
+    }));
+  },
+
   reset() {
     set({
       conn: 'idle',
@@ -118,6 +148,9 @@ export const useGame = create<State>((set, get) => ({
       killTarget: MATCH.defaultKillTarget,
       winnerId: null,
       lastCloseReason: null,
+      activeVoiceSession: null,
+      voiceStatus: 'idle',
+      voiceTranscripts: [],
     });
   },
 }));

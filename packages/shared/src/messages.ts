@@ -25,17 +25,35 @@ export interface InputFrame {
   aim: Vec3 | null;
 }
 
+export interface TranscriptLine {
+  role: 'user' | 'agent';
+  text: string;
+  at: number;
+}
+
 export type ClientMessage =
   | { type: 'hello'; name: string }
   | { type: 'input'; frames: InputFrame[] }
   | { type: 'chat'; text: string }
-  | { type: 'ping'; t: number };
+  | { type: 'ping'; t: number }
+  | { type: 'consent'; agreed: boolean; version: string }
+  | { type: 'voice_session_start'; npcId: string; sessionId: string }
+  | { type: 'voice_session_end'; sessionId: string }
+  | { type: 'transcript'; npcId: string; sessionId: string; line: TranscriptLine };
 
 export type ServerMessage =
   | { type: 'welcome'; you: PlayerId; serverTime: number }
   | { type: 'snapshot'; snapshot: GameSnapshot }
   | { type: 'events'; events: GameEvent[] }
-  | { type: 'pong'; t: number; serverTime: number };
+  | { type: 'pong'; t: number; serverTime: number }
+  | { type: 'consent_required'; version: string }
+  | {
+      type: 'npc_context';
+      npcId: string;
+      sessionId: string;
+      memoryBlob: string;
+      friendship: number;
+    };
 
 export const encode = <T>(msg: T): string => JSON.stringify(msg);
 export const decode = <T>(raw: string): T => JSON.parse(raw) as T;

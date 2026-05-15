@@ -17,6 +17,7 @@ import { castCameraRay, findAimTarget, stampAimedAt } from './aim-state.js';
 import { hapticFire } from './haptics.js';
 import { playDryFire } from './sfx.js';
 import { PlayerModel } from './PlayerModel.js';
+import { tickVoiceProximity } from '../voice/manager.js';
 
 interface Props {
   send(msg: ClientMessage): void;
@@ -203,6 +204,8 @@ export const LocalPlayer = ({ send, myName }: Props) => {
 
     ref.current.position.set(state.position[0], state.position[1], state.position[2]);
     ref.current.rotation.y = state.yaw;
+
+    tickVoiceProximity(state.position);
 
     // Aim-target detection for enemy nameplate reveal. Mirrors server fire
     // raycast — same eye height, same hit radius, same wall occlusion. Stamps
