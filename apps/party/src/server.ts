@@ -42,6 +42,21 @@ import { GameStorage } from './storage.js';
 
 export const CONSENT_VERSION = 'v1';
 
+const jsonResponse = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+
+const constantTimeEqual = (a: string, b: string): boolean => {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+};
+
 export default class SlipstreamServer implements Party.Server {
   readonly options: Party.ServerOptions = {
     hibernate: false,
@@ -343,6 +358,58 @@ export default class SlipstreamServer implements Party.Server {
 
   onError(_conn: Party.Connection, err: Error): void {
     console.error('connection error', err);
+  }
+
+  async onRequest(req: Party.Request): Promise<Response> {
+    const url = new URL(req.url);
+    if (req.method !== 'POST') return jsonResponse({ error: 'method not allowed' }, 405);
+    // PartyKit prefixes routes with /parties/<party>/<room>; the trailing path
+    // is what callers configure in the ElevenLabs dashboard.
+    if (!url.pathname.endsWith('/tools/make_friend')) {
+      return jsonResponse({ error: 'not found' }, 404);
+    }
+    const expected = (this.room.env.ELEVENLABS_AGENT_TOOL_SECRET as string | undefined) ?? '';
+    if (!expected) return jsonResponse({ error: 'tools disabled' }, 503);
+
+    let body: { npcId?: string; playerName?: string; sessionId?: string; secret?: string };
+    try {
+      body = (await req.json()) as typeof body;
+    } catch {
+      return jsonResponse({ error: 'bad json' }, 400);
+    }
+    if (!constantTimeEqual(body.secret ?? '', expected)) {
+      return jsonResponse({ error: 'unauthorized' }, 401);
+    }
+    const npcId = body.npcId ?? '';
+    const playerName = body.playerName ?? '';
+    const npc = npcById(npcId);
+    if (!npc || !playerName) return jsonResponse({ error: 'bad params' }, 400);
+    if (!(await this.store.getConsent(playerName))) {
+      return jsonResponse({ error: 'no consent on record' }, 403);
+    }
+
+    const result = await this.store.addFriendshipScore(
+      npcId,
+      playerName,
+      SOCIAL.friendBoost,
+      SOCIAL.friendThreshold,
+    );
+
+    if (result.becameFriend) {
+      // Mirror the friendship into the live player and NPC ServerPlayers so
+      // the next broadcast snapshot reflects the new friendship pip and the
+      // hostility-propagation rules in social.markAttack see them as friends.
+      for (const p of this.players.values()) {
+        if (p.name === playerName && !p.friendsWith.includes(npc.name)) {
+          p.friendsWith.push(npc.name);
+        }
+        if (p.isBot && p.npcId === npc.id && !p.friendsWith.includes(playerName)) {
+          p.friendsWith.push(playerName);
+        }
+      }
+    }
+
+    return jsonResponse({ ok: true, score: result.score, becameFriend: result.becameFriend });
   }
 
   private runTick(): void {
