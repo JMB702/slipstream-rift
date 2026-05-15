@@ -64,6 +64,9 @@ const MODEL_URLS: Record<CharacterId, string> = {
   soldier: '/models/Soldier.glb',
   ch15: '/models/Ch15.glb',
   ch35: '/models/Ch35.glb',
+  eve: '/models/Eve.glb',
+  maria: '/models/Maria.glb',
+  medea: '/models/Medea.glb',
 };
 for (const url of Object.values(MODEL_URLS)) useGLTF.preload(url);
 

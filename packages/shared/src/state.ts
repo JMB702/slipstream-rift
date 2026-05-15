@@ -2,7 +2,7 @@ export type PlayerId = string;
 
 export type Vec3 = readonly [number, number, number];
 
-export type CharacterId = 'soldier' | 'ch15' | 'ch35';
+export type CharacterId = 'soldier' | 'ch15' | 'ch35' | 'eve' | 'maria' | 'medea';
 
 export interface PlayerState {
   id: PlayerId;

@@ -4,6 +4,7 @@ import {
   DEFAULT_MAP_ID,
   MATCH,
   MAX_PLAYERS,
+  MALE_CHARACTER_ID,
   NPCS,
   PLAYER,
   SOCIAL,
@@ -15,6 +16,7 @@ import {
   isBotDifficulty,
   isMapId,
   npcById,
+  pickCharacterMix,
   setActiveMap,
   type BotDifficulty,
   type ClientMessage,
@@ -361,6 +363,11 @@ export default class SlipstreamServer implements Party.Server {
     }
     const free: NpcDef[] = NPCS.filter((n) => !taken.has(n.id));
     const slots = Math.min(toAdd, free.length);
+    // Character mix is computed for the room's full bot count so the rule
+    // (1=>1f, 2=>2f, 3=>2f+1m, 4=>3f+1m, 5+=>random) is stable regardless of
+    // which NPCs land in which spawn slots. Existing bots already consumed
+    // mix[0..existing); new bots claim the next entries.
+    const mix = pickCharacterMix(desired);
     for (let i = 0; i < slots; i++) {
       const def = free[i]!;
       const id = `bot-${def.id}-${Math.random().toString(36).slice(2, 7)}`;
@@ -369,7 +376,7 @@ export default class SlipstreamServer implements Party.Server {
         .filter((n): n is string => typeof n === 'string');
       const bot = initialPlayer(id, id, def.name, randomSpawn(), now, {
         isBot: true,
-        characterId: def.characterId,
+        characterId: mix[existing + i] ?? MALE_CHARACTER_ID,
       });
       bot.npcId = def.id;
       bot.friendsWith = friendNames;
