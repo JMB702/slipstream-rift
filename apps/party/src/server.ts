@@ -431,22 +431,30 @@ export default class SlipstreamServer implements Party.Server {
     const expected = (this.room.env.ELEVENLABS_AGENT_TOOL_SECRET as string | undefined) ?? '';
     if (!expected) return jsonResponse({ error: 'tools disabled' }, 503);
 
+    // Tool params can arrive either as query string (the default in the
+    // ElevenLabs dashboard form-based config) OR as JSON body (legacy/
+    // alternative config). Query string wins if both are present.
+    const q = url.searchParams;
     let body: {
       npcId?: string;
       playerName?: string;
       sessionId?: string;
       secret?: string;
-    };
-    try {
-      body = (await req.json()) as typeof body;
-    } catch {
-      return jsonResponse({ error: 'bad json' }, 400);
+    } = {};
+    if (req.headers.get('content-type')?.includes('application/json')) {
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        // ignore — fall through to query-string-only path
+      }
     }
-    if (!constantTimeEqual(body.secret ?? '', expected)) {
+    const secret = q.get('secret') ?? body.secret ?? '';
+    const npcId = q.get('npcId') ?? body.npcId ?? '';
+    const playerName = q.get('playerName') ?? body.playerName ?? '';
+
+    if (!constantTimeEqual(secret, expected)) {
       return jsonResponse({ error: 'unauthorized' }, 401);
     }
-    const npcId = body.npcId ?? '';
-    const playerName = body.playerName ?? '';
     const npc = npcById(npcId);
     if (!npc || !playerName) return jsonResponse({ error: 'bad params' }, 400);
     if (!(await this.store.getConsent(playerName))) {
