@@ -274,11 +274,22 @@ export const regenHealth = (player: ServerPlayer, now: number): void => {
   );
 };
 
+export interface NpcDamageAlert {
+  targetConnId: string;
+  npcId: string;
+  sessionId: string;
+  shooterName: string;
+  damage: number;
+  hpAfter: number;
+  killed: boolean;
+}
+
 export const tryFire = (
   shooter: ServerPlayer,
   others: ServerPlayer[],
   now: number,
   aim: { aimOrigin: Vec3; aim: Vec3 } | null,
+  onNpcAlert?: (alert: NpcDamageAlert) => void,
 ): GameEvent[] => {
   if (!shooter.alive || shooter.reloading || shooter.vaultEndAt !== null || shooter.ammo <= 0) return [];
 
@@ -371,6 +382,23 @@ export const tryFire = (
       victim.health -= WEAPON.damage;
       victim.lastDamagedAt = now;
       markAttack(shooter.name, victim, [shooter, ...others], now);
+      if (
+        onNpcAlert &&
+        victim.isBot &&
+        victim.npcId &&
+        victim.botConversationWith &&
+        victim.botActiveSessionId
+      ) {
+        onNpcAlert({
+          targetConnId: victim.botConversationWith,
+          npcId: victim.npcId,
+          sessionId: victim.botActiveSessionId,
+          shooterName: shooter.name,
+          damage: WEAPON.damage,
+          hpAfter: Math.max(0, victim.health),
+          killed: victim.health <= 0,
+        });
+      }
       if (victim.health <= 0) {
         victim.health = 0;
         victim.alive = false;

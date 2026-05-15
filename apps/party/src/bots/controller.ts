@@ -182,6 +182,19 @@ export const tickBot = (
     }
   }
 
+  // Resolve agent-driven follow / flee targets. Engage (hostility) always
+  // wins over these — combat takes precedence over a chat-induced follow.
+  const followTarget =
+    bot.botFollowing && bot.botState !== 'engage'
+      ? others.find((p) => p.id === bot.botFollowing && p.alive) ?? null
+      : null;
+  const fleeingActive = bot.botFleeingFrom && bot.botFleeingFrom.until > now;
+  if (bot.botFleeingFrom && !fleeingActive) bot.botFleeingFrom = null;
+  const fleeFrom =
+    fleeingActive && bot.botState !== 'engage'
+      ? others.find((p) => p.id === bot.botFleeingFrom!.id && p.alive) ?? null
+      : null;
+
   // Plan / replan path for non-engage states.
   if (bot.botState !== 'engage') {
     const replanDue =
@@ -191,7 +204,29 @@ export const tickBot = (
       bot.botPath.length === 0;
     if (replanDue) {
       let goal: Vec3 | null = null;
-      if (bot.botState === 'hunt' && bot.botGoal) {
+      if (followTarget) {
+        // Follow distance: aim for ~3m off the target, in their facing direction
+        // so the NPC trails behind rather than blocking them.
+        const ft = followTarget;
+        const back: Vec3 = [
+          ft.position[0] + Math.sin(ft.yaw) * 3,
+          ft.position[1],
+          ft.position[2] + Math.cos(ft.yaw) * 3,
+        ];
+        goal = back;
+      } else if (fleeFrom) {
+        // Flee: pick a node opposite the fleeing-from player.
+        const ff = fleeFrom;
+        const dx = bot.position[0] - ff.position[0];
+        const dz = bot.position[2] - ff.position[2];
+        const len = Math.hypot(dx, dz) || 1;
+        const norm: Vec3 = [
+          bot.position[0] + (dx / len) * 15,
+          bot.position[1],
+          bot.position[2] + (dz / len) * 15,
+        ];
+        goal = norm;
+      } else if (bot.botState === 'hunt' && bot.botGoal) {
         goal = bot.botGoal;
       } else if (bot.botGoal) {
         goal = bot.botGoal;
@@ -210,6 +245,19 @@ export const tickBot = (
     advancePathIfArrived(bot);
   }
 
+  // Voice-conversation freeze: if a player has an active ConvAI session
+  // with this NPC and the NPC is not in engage AND not actively following
+  // or fleeing (those tools are themselves conversation outputs), the NPC
+  // freezes and faces the player. Following/fleeing override the freeze
+  // because the conversation just asked the NPC to MOVE.
+  const conversingWith =
+    bot.botConversationWith &&
+    bot.botState !== 'engage' &&
+    !followTarget &&
+    !fleeFrom
+      ? others.find((p) => p.id === bot.botConversationWith && p.alive) ?? null
+      : null;
+
   // Compute desired facing direction.
   let desiredYaw = bot.yaw;
   let desiredPitch = bot.pitch;
@@ -217,6 +265,10 @@ export const tickBot = (
     const aim = yawPitchToward(eyePosition(bot), eyePosition(target));
     desiredYaw = aim.yaw + jitter(profile.aimJitterRad);
     desiredPitch = aim.pitch + jitter(profile.aimJitterRad);
+  } else if (conversingWith) {
+    const aim = yawPitchToward(eyePosition(bot), eyePosition(conversingWith));
+    desiredYaw = aim.yaw;
+    desiredPitch = aim.pitch;
   } else {
     const next = currentWaypoint(bot);
     if (next) {
@@ -269,6 +321,15 @@ export const tickBot = (
       forward = clamp(fr.forward, -1, 1);
       right = clamp(fr.right, -1, 1);
     }
+  }
+
+  // Conversation override wins over patrol movement (but not over engage —
+  // hostility-driven combat already took precedence above).
+  if (conversingWith) {
+    forward = 0;
+    right = 0;
+    sprint = false;
+    jump = false;
   }
 
   // Stuck detection: if we're meant to be moving and we're crawling, jump and

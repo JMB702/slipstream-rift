@@ -5,10 +5,9 @@ import type { NpcDef, TranscriptLine } from '@slipstream-npc/shared';
 export interface ConvAICallbacks {
   onTranscript?: (line: TranscriptLine) => void;
   onStatusChange?: (status: 'idle' | 'connecting' | 'connected' | 'ended' | 'error') => void;
+  onModeChange?: (mode: 'speaking' | 'listening') => void;
   onClientToolCall?: (name: string, params: unknown) => Promise<string> | string;
 }
-
-const isPlaceholderAgent = (agentId: string): boolean => agentId.startsWith('TODO_AGENT_ID_');
 
 export class ConvAISession {
   readonly sessionId: string;
@@ -26,25 +25,29 @@ export class ConvAISession {
     this.cb = cb;
   }
 
-  async start(opts: { memoryBlob: string; voiceId?: string }): Promise<void> {
+  async start(opts: {
+    agentId?: string;
+    signedUrl?: string;
+    memoryBlob: string;
+    voiceId?: string;
+  }): Promise<void> {
     if (this.conversation || this.ended) return;
     this.cb.onStatusChange?.('connecting');
-    if (isPlaceholderAgent(this.npc.agentId)) {
-      console.warn(
-        `[voice] NPC "${this.npc.name}" uses a placeholder agent id ${this.npc.agentId}. ` +
-          `Author an agent in the ElevenLabs dashboard and update packages/shared/src/npc-roster.ts. ` +
-          `Session not started.`,
-      );
+    if (!opts.agentId && !opts.signedUrl) {
+      console.warn(`[voice] no agentId or signedUrl provided for ${this.npc.name}`);
       this.cb.onStatusChange?.('error');
       return;
     }
+    const authConfig = opts.signedUrl
+      ? ({ signedUrl: opts.signedUrl } as const)
+      : ({ agentId: opts.agentId! } as const);
     try {
       this.conversation = await Conversation.startSession({
-        agentId: this.npc.agentId,
+        ...authConfig,
         overrides: {
           agent: {
             prompt: { prompt: opts.memoryBlob },
-            firstMessage: undefined,
+            firstMessage: this.npc.greeting,
           },
           ...(opts.voiceId ? { tts: { voiceId: opts.voiceId } } : {}),
         },
@@ -59,6 +62,9 @@ export class ConvAISession {
         },
         onDisconnect: () => {
           this.cb.onStatusChange?.('ended');
+        },
+        onModeChange: ({ mode }) => {
+          this.cb.onModeChange?.(mode);
         },
         onError: (msg) => {
           console.warn(`[voice] session error for ${this.npc.name}: ${msg}`);
@@ -87,6 +93,40 @@ export class ConvAISession {
   setMuted(muted: boolean): void {
     if (!this.conversation) return;
     if ('setMicMuted' in this.conversation) this.conversation.setMicMuted(muted);
+  }
+
+  // Inject a system-level message into the live conversation. Used by the
+  // game to feed in-game events (damage, player movement, kill score) to the
+  // agent so it can react in voice mid-conversation. The SDK queues these
+  // until the agent's next turn.
+  sendContextualUpdate(text: string): void {
+    if (!this.conversation) return;
+    try {
+      this.conversation.sendContextualUpdate(text);
+    } catch (err) {
+      console.warn(`[voice] sendContextualUpdate failed:`, err);
+    }
+  }
+
+  // Realtime volume probes from the SDK — used to gate the on-head speaker
+  // icons on actual audio activity, not just session-open. Returns 0 when
+  // there's no live conversation yet.
+  getInputVolume(): number {
+    if (!this.conversation) return 0;
+    try {
+      return this.conversation.getInputVolume() || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  getOutputVolume(): number {
+    if (!this.conversation) return 0;
+    try {
+      return this.conversation.getOutputVolume() || 0;
+    } catch {
+      return 0;
+    }
   }
 
   async end(): Promise<void> {

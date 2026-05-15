@@ -18,6 +18,7 @@ import { hapticFire } from './haptics.js';
 import { playDryFire } from './sfx.js';
 import { PlayerModel } from './PlayerModel.js';
 import { tickVoiceProximity } from '../voice/manager.js';
+import { useMuted } from '../voice/mute.js';
 
 interface Props {
   send(msg: ClientMessage): void;
@@ -218,6 +219,12 @@ export const LocalPlayer = ({ send, myName }: Props) => {
   const myId = useGame((s) => s.myId);
   const lastSnap = useGame((s) => s.snapshots[s.snapshots.length - 1]);
   const me = myId ? lastSnap?.players.get(myId) : undefined;
+  const inputVolume = useGame((s) => s.voiceInputVolume);
+  const muted = useMuted();
+  // Analyzer-based RMS reading (voice/level.ts). Idle hovers ~0.005, normal
+  // speech is well past 0.04. No session check — mic level is meaningful
+  // independent of SDK state.
+  const localVoiceIcon: 'mic' | null = !muted && inputVolume > 0.04 ? 'mic' : null;
 
   return (
     <group ref={ref}>
@@ -230,6 +237,7 @@ export const LocalPlayer = ({ send, myName }: Props) => {
         reloading={me?.reloading ?? false}
         vaulting={me?.vaulting ?? false}
         playerId={myId ?? null}
+        voiceIcon={localVoiceIcon}
       />
     </group>
   );

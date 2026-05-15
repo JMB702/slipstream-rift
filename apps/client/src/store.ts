@@ -17,6 +17,7 @@ export interface ActiveVoiceSession {
 }
 
 export type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'ended' | 'error';
+export type VoiceMode = 'speaking' | 'listening' | null;
 
 export type ConnState = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
@@ -40,6 +41,10 @@ interface State {
   lastCloseReason: string | null;
   activeVoiceSession: ActiveVoiceSession | null;
   voiceStatus: VoiceStatus;
+  voiceMode: VoiceMode;
+  voiceInputVolume: number;
+  voiceOutputVolume: number;
+  voiceLastError: string | null;
   voiceTranscripts: { npcId: string; sessionId: string; line: TranscriptLine }[];
   setConn(s: ConnState): void;
   setCloseReason(r: string | null): void;
@@ -49,6 +54,9 @@ interface State {
   ingestEvents(e: GameEvent[]): void;
   setActiveVoiceSession(s: ActiveVoiceSession | null): void;
   setVoiceSessionStatus(s: VoiceStatus): void;
+  setVoiceMode(m: VoiceMode): void;
+  setVoiceVolumes(input: number, output: number): void;
+  setVoiceLastError(err: string | null): void;
   pushTranscript(t: { npcId: string; sessionId: string; line: TranscriptLine }): void;
   reset(): void;
 }
@@ -80,6 +88,10 @@ export const useGame = create<State>((set, get) => ({
   lastCloseReason: null,
   activeVoiceSession: null,
   voiceStatus: 'idle',
+  voiceMode: null,
+  voiceInputVolume: 0,
+  voiceOutputVolume: 0,
+  voiceLastError: null,
   voiceTranscripts: [],
 
   setConn(s) {
@@ -123,11 +135,27 @@ export const useGame = create<State>((set, get) => ({
   },
 
   setActiveVoiceSession(s) {
-    set({ activeVoiceSession: s, voiceStatus: s ? 'connecting' : 'idle' });
+    set({
+      activeVoiceSession: s,
+      voiceStatus: s ? 'connecting' : 'idle',
+      voiceMode: s ? get().voiceMode : null,
+    });
   },
 
   setVoiceSessionStatus(s) {
     set({ voiceStatus: s });
+  },
+
+  setVoiceMode(m) {
+    set({ voiceMode: m });
+  },
+
+  setVoiceVolumes(input, output) {
+    set({ voiceInputVolume: input, voiceOutputVolume: output });
+  },
+
+  setVoiceLastError(err) {
+    set({ voiceLastError: err });
   },
 
   pushTranscript(t) {
@@ -150,6 +178,10 @@ export const useGame = create<State>((set, get) => ({
       lastCloseReason: null,
       activeVoiceSession: null,
       voiceStatus: 'idle',
+      voiceMode: null,
+      voiceInputVolume: 0,
+      voiceOutputVolume: 0,
+      voiceLastError: null,
       voiceTranscripts: [],
     });
   },

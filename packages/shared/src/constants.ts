@@ -343,8 +343,11 @@ export const SOCIAL = {
 } as const;
 
 export const NPC_VOICE = {
-  radius: 5,
-  hysteresis: 0.5,
+  // 15m radius gives players a chance to call out to an NPC across a room
+  // instead of having to be face-to-face. Hysteresis prevents flapping at
+  // the boundary as the player paces.
+  radius: 15,
+  hysteresis: 1,
 } as const;
 
 export const VAULT = {

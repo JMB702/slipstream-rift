@@ -34,6 +34,7 @@ import {
   regenHealth,
   tickVault,
   tryFire,
+  type NpcDamageAlert,
 } from './simulation.js';
 import { initialPlayer, randomSpawn, type ServerPlayer } from './state.js';
 import { ensureBotDefaults, tickBot } from './bots/controller.js';
@@ -265,10 +266,25 @@ export default class SlipstreamServer implements Party.Server {
         return;
       }
       case 'voice_session_start': {
+        // Bind the player to the NPC immediately so the bot freezes and
+        // faces them on the next tick — don't wait for handleVoiceSessionStart
+        // to finish minting the signed URL.
+        for (const p of this.players.values()) {
+          if (p.isBot && p.npcId === msg.npcId) {
+            p.botConversationWith = sender.id;
+            p.botActiveSessionId = msg.sessionId;
+          }
+        }
         void this.handleVoiceSessionStart(player.name, msg.npcId, msg.sessionId, sender);
         return;
       }
       case 'voice_session_end': {
+        for (const p of this.players.values()) {
+          if (p.isBot && p.botConversationWith === sender.id) {
+            p.botConversationWith = null;
+            p.botActiveSessionId = null;
+          }
+        }
         return;
       }
       case 'transcript': {
@@ -290,6 +306,20 @@ export default class SlipstreamServer implements Party.Server {
   }
 
   onClose(conn: Party.Connection): void {
+    // Release any bot still bound to this player as a conversation partner,
+    // and break any follow/flee bindings keyed off this conn.
+    for (const p of this.players.values()) {
+      if (p.isBot && p.botConversationWith === conn.id) {
+        p.botConversationWith = null;
+        p.botActiveSessionId = null;
+      }
+      if (p.isBot && p.botFollowing === conn.id) {
+        p.botFollowing = null;
+      }
+      if (p.isBot && p.botFleeingFrom?.id === conn.id) {
+        p.botFleeingFrom = null;
+      }
+    }
     this.players.delete(conn.id);
     this.pendingFire.delete(conn.id);
     // If the only humans are gone, drop the bots too — no point simulating an
@@ -398,15 +428,15 @@ export default class SlipstreamServer implements Party.Server {
   async onRequest(req: Party.Request): Promise<Response> {
     const url = new URL(req.url);
     if (req.method !== 'POST') return jsonResponse({ error: 'method not allowed' }, 405);
-    // PartyKit prefixes routes with /parties/<party>/<room>; the trailing path
-    // is what callers configure in the ElevenLabs dashboard.
-    if (!url.pathname.endsWith('/tools/make_friend')) {
-      return jsonResponse({ error: 'not found' }, 404);
-    }
     const expected = (this.room.env.ELEVENLABS_AGENT_TOOL_SECRET as string | undefined) ?? '';
     if (!expected) return jsonResponse({ error: 'tools disabled' }, 503);
 
-    let body: { npcId?: string; playerName?: string; sessionId?: string; secret?: string };
+    let body: {
+      npcId?: string;
+      playerName?: string;
+      sessionId?: string;
+      secret?: string;
+    };
     try {
       body = (await req.json()) as typeof body;
     } catch {
@@ -423,17 +453,29 @@ export default class SlipstreamServer implements Party.Server {
       return jsonResponse({ error: 'no consent on record' }, 403);
     }
 
+    if (url.pathname.endsWith('/tools/make_friend')) {
+      return this.handleMakeFriendTool(npc, playerName);
+    }
+    if (url.pathname.endsWith('/tools/follow_player')) {
+      return this.handleFollowTool(npc, playerName, true);
+    }
+    if (url.pathname.endsWith('/tools/stop_following')) {
+      return this.handleFollowTool(npc, playerName, false);
+    }
+    if (url.pathname.endsWith('/tools/flee_from')) {
+      return this.handleFleeTool(npc, playerName);
+    }
+    return jsonResponse({ error: 'not found' }, 404);
+  }
+
+  private async handleMakeFriendTool(npc: NpcDef, playerName: string): Promise<Response> {
     const result = await this.store.addFriendshipScore(
-      npcId,
+      npc.id,
       playerName,
       SOCIAL.friendBoost,
       SOCIAL.friendThreshold,
     );
-
     if (result.becameFriend) {
-      // Mirror the friendship into the live player and NPC ServerPlayers so
-      // the next broadcast snapshot reflects the new friendship pip and the
-      // hostility-propagation rules in social.markAttack see them as friends.
       for (const p of this.players.values()) {
         if (p.name === playerName && !p.friendsWith.includes(npc.name)) {
           p.friendsWith.push(npc.name);
@@ -443,8 +485,39 @@ export default class SlipstreamServer implements Party.Server {
         }
       }
     }
-
     return jsonResponse({ ok: true, score: result.score, becameFriend: result.becameFriend });
+  }
+
+  // Mark the bot for this NPC as following (or stop following) the named
+  // human player. tickBot reads botFollowing and overrides its patrol goal
+  // when set. Only effective while a live human with that name exists.
+  private handleFollowTool(npc: NpcDef, playerName: string, follow: boolean): Response {
+    const human = Array.from(this.players.values()).find(
+      (p) => !p.isBot && p.name === playerName,
+    );
+    if (!human) return jsonResponse({ error: 'player not in room' }, 404);
+    const bot = Array.from(this.players.values()).find(
+      (p) => p.isBot && p.npcId === npc.id,
+    );
+    if (!bot) return jsonResponse({ error: 'npc not spawned' }, 404);
+    bot.botFollowing = follow ? human.id : null;
+    return jsonResponse({ ok: true, following: !!bot.botFollowing });
+  }
+
+  // Mark the bot for this NPC as fleeing from the named human for the next
+  // SOCIAL.hostilityMs window. tickBot reads botFleeingFrom and steers the
+  // path away from that player. Doesn't override engage (hostility wins).
+  private handleFleeTool(npc: NpcDef, playerName: string): Response {
+    const human = Array.from(this.players.values()).find(
+      (p) => !p.isBot && p.name === playerName,
+    );
+    if (!human) return jsonResponse({ error: 'player not in room' }, 404);
+    const bot = Array.from(this.players.values()).find(
+      (p) => p.isBot && p.npcId === npc.id,
+    );
+    if (!bot) return jsonResponse({ error: 'npc not spawned' }, 404);
+    bot.botFleeingFrom = { id: human.id, until: this.serverTime() + SOCIAL.hostilityMs };
+    return jsonResponse({ ok: true });
   }
 
   private runTick(): void {
@@ -487,13 +560,27 @@ export default class SlipstreamServer implements Party.Server {
     }
 
     if (this.winnerId === null && this.pendingFire.size > 0) {
+      const npcAlerts: NpcDamageAlert[] = [];
       for (const [id, aim] of this.pendingFire) {
         const shooter = this.players.get(id);
         if (!shooter) continue;
-        const fired = tryFire(shooter, all, now, aim);
+        const fired = tryFire(shooter, all, now, aim, (a) => npcAlerts.push(a));
         if (fired.length > 0) this.events.push(...fired);
       }
       this.pendingFire.clear();
+      for (const a of npcAlerts) {
+        const conn = this.room.getConnection(a.targetConnId);
+        if (!conn) continue;
+        const text = a.killed
+          ? `[System: ${a.shooterName} just killed you. You'll respawn shortly. React in character — your last words now.]`
+          : `[System: ${a.shooterName} just shot you for ${a.damage} damage. You have ${a.hpAfter} HP left. They are now hostile to you. React in character — anger, threats, trash talk if it fits your persona; or fear if you'd rather flee.]`;
+        this.send(conn, {
+          type: 'npc_alert',
+          npcId: a.npcId,
+          sessionId: a.sessionId,
+          text,
+        });
+      }
 
       // Did anyone hit the kill target this tick? Pick the highest-scoring
       // player as the winner (ties broken by player insertion order).
@@ -594,15 +681,53 @@ export default class SlipstreamServer implements Party.Server {
     }
     const npc = npcById(npcId);
     if (!npc) return;
+    const agentId = this.resolveAgentId(npc);
+    if (!agentId) {
+      console.warn(
+        `[voice] no agent id for npc ${npcId}: roster placeholder + env ELEVENLABS_AGENT_ID not set`,
+      );
+      return;
+    }
     const friendship = (await this.store.getFriendship(npcId, playerName)).score;
     const memoryBlob = await this.buildMemoryBlob(npc, playerName);
+    // Try minting a signed URL — works for both public and private agents
+    // and keeps the API key off the client. If the API call fails, fall back
+    // to handing the raw agentId to the client (works for public agents).
+    const signedUrl = await this.mintSignedUrl(agentId);
     this.send(sender, {
       type: 'npc_context',
       npcId,
       sessionId,
+      ...(signedUrl ? { signedUrl } : { agentId }),
       memoryBlob,
       friendship,
     });
+  }
+
+  private resolveAgentId(npc: NpcDef): string | null {
+    if (npc.agentId && !npc.agentId.startsWith('TODO_AGENT_ID_')) return npc.agentId;
+    const fallback = this.room.env.ELEVENLABS_AGENT_ID as string | undefined;
+    return fallback && fallback.trim() ? fallback : null;
+  }
+
+  private async mintSignedUrl(agentId: string): Promise<string | null> {
+    const apiKey = this.room.env.ELEVENLABS_API_KEY as string | undefined;
+    if (!apiKey) return null;
+    try {
+      const res = await fetch(
+        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`,
+        { headers: { 'xi-api-key': apiKey } },
+      );
+      if (!res.ok) {
+        console.warn(`[voice] get-signed-url failed ${res.status} for agent ${agentId}`);
+        return null;
+      }
+      const body = (await res.json()) as { signed_url?: string };
+      return body.signed_url ?? null;
+    } catch (err) {
+      console.warn('[voice] get-signed-url threw:', err);
+      return null;
+    }
   }
 
   private async buildMemoryBlob(npc: NpcDef, playerName: string): Promise<string> {
@@ -613,13 +738,65 @@ export default class SlipstreamServer implements Party.Server {
     const others = await this.store.listRecentForNpc(npc.id, playerName, cutoff);
     others.sort((a, b) => a.line.at - b.line.at);
     const tail = others.slice(-5);
+
+    // Live game state: persona-relevant context the agent should know about
+    // when the conversation opens. Updated only at session start; mid-session
+    // events come through as npc_alert → sendContextualUpdate.
+    const liveBot = Array.from(this.players.values()).find(
+      (p) => p.isBot && p.npcId === npc.id,
+    );
+    const livePlayer = Array.from(this.players.values()).find(
+      (p) => !p.isBot && p.name === playerName,
+    );
+    const otherNpcs = Array.from(this.players.values()).filter(
+      (p) => p.isBot && p.npcId !== npc.id && p.alive,
+    );
+    const hostileTowardPlayer =
+      liveBot?.hostility.some(
+        (h) => h.towardsName === playerName && h.until > this.serverTime(),
+      ) ?? false;
+
     const lines: string[] = [];
     lines.push(`You are ${npc.name}. ${npc.personality}`);
+    lines.push('');
+    lines.push('## The game you live in');
+    lines.push(
+      'Slipstream is a 3D arena where players can shoot each other. You are an NPC who patrols the map. ' +
+        'You do not have to fight, but you can defend yourself if attacked. The arena has corridors, ramps, ' +
+        'crates and an open central area. Other players may walk in and out of earshot at any time.',
+    );
+    lines.push('');
+    lines.push('## Right now');
+    if (liveBot) {
+      lines.push(
+        `Your health: ${liveBot.health}/100. Your ammo: ${liveBot.ammo}. ` +
+          (liveBot.botFollowing ? `You are currently following ${playerName}. ` : '') +
+          (liveBot.botFleeingFrom ? `You are currently fleeing from someone. ` : '') +
+          (hostileTowardPlayer
+            ? `You are HOSTILE to ${playerName} right now — they attacked you recently.`
+            : ''),
+      );
+    }
+    if (livePlayer) {
+      lines.push(
+        `${playerName}'s health: ${livePlayer.health}/100. They have ${livePlayer.kills} kills and ${livePlayer.deaths} deaths this round.`,
+      );
+    }
+    if (otherNpcs.length > 0) {
+      lines.push(
+        `Other NPCs in the arena: ${otherNpcs.map((p) => p.name).join(', ')}. ` +
+          (liveBot && liveBot.friendsWith.length > 0
+            ? `Your friends: ${liveBot.friendsWith.join(', ')}.`
+            : 'You currently have no friends in the arena.'),
+      );
+    }
+    lines.push('');
     lines.push(
       `Friendship score with ${playerName}: ${friendship.score} (threshold ${SOCIAL.friendThreshold}).` +
         (friendship.score >= SOCIAL.friendThreshold ? ' They are your friend.' : ''),
     );
     if (recentOurs.length > 0) {
+      lines.push('');
       lines.push(`Recent conversation with ${playerName}:`);
       for (const l of recentOurs) {
         const who = l.role === 'user' ? playerName : npc.name;
@@ -627,13 +804,41 @@ export default class SlipstreamServer implements Party.Server {
       }
     }
     if (tail.length > 0) {
+      lines.push('');
       lines.push('Other players you have spoken with recently:');
       for (const o of tail) {
         const who = o.line.role === 'user' ? o.playerName : npc.name;
         lines.push(`  ${who}: ${o.line.text}`);
       }
     }
-    return lines.join('\n').slice(0, 2048);
+
+    lines.push('');
+    lines.push('## Reacting to in-game events');
+    lines.push(
+      'During this conversation you may receive a system message in [brackets like this]. ' +
+        'Treat it as a thing you just observed in the world (e.g. taking damage, a player walking away). ' +
+        'React in character in voice, then continue the conversation. Short reactions.',
+    );
+    lines.push('');
+    lines.push('## Tools you can call (each is a separate webhook the game enforces)');
+    lines.push(
+      '- make_friend: only after a real moment of trust/shared experience. Not on greetings.',
+    );
+    lines.push(
+      `- follow_player: call this when ${playerName} explicitly asks you to follow them AND you agree (most often if you are friends). The game will then path you toward them.`,
+    );
+    lines.push(
+      `- stop_following: call this when you want to stop following the player.`,
+    );
+    lines.push(
+      `- flee_from: call this when you genuinely want to physically retreat from ${playerName} (e.g. they insulted or threatened you and your persona would back off). The game paths you away from them.`,
+    );
+    lines.push('');
+    lines.push(
+      'Calling a tool produces a physical action in the game world. The player will SEE you start following or running. Use them when the conversation warrants it; do not announce that you are calling a tool, just do the action and react.',
+    );
+
+    return lines.join('\n').slice(0, 4096);
   }
 
   private serverTime(): number {

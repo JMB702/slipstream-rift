@@ -8,7 +8,7 @@ import {
   type ServerMessage,
 } from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
-import { handleConsentRequired, handleNpcContext } from '../voice/manager.js';
+import { handleConsentRequired, handleNpcAlert, handleNpcContext } from '../voice/manager.js';
 
 const urlHost =
   typeof window !== 'undefined'
@@ -111,6 +111,9 @@ export const connect = (
         return;
       case 'npc_context':
         handleNpcContext(msg);
+        return;
+      case 'npc_alert':
+        handleNpcAlert(msg);
         return;
       case 'consent_required':
         handleConsentRequired();

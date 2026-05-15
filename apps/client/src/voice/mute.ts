@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { setMicEnabled } from './mic.js';
 
 type Listener = (muted: boolean) => void;
@@ -20,6 +21,20 @@ export const onMuteChange = (l: Listener): (() => void) => {
   listeners.add(l);
   return () => listeners.delete(l);
 };
+
+// React hook backed by useSyncExternalStore so any component re-renders
+// when mute flips. The MuteIndicator widget uses its own local state; this
+// hook is for components like the speaker icon over the local player.
+const subscribe = (cb: () => void): (() => void) => {
+  const wrapped: Listener = () => cb();
+  listeners.add(wrapped);
+  return () => {
+    listeners.delete(wrapped);
+  };
+};
+const getSnapshot = (): boolean => muted;
+export const useMuted = (): boolean => useSyncExternalStore(subscribe, getSnapshot);
+
 
 let gamepadPollHandle: number | null = null;
 const prevButtons = new Map<number, boolean>();

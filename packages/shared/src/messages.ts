@@ -51,9 +51,19 @@ export type ServerMessage =
       type: 'npc_context';
       npcId: string;
       sessionId: string;
+      // For public agents the client uses agentId directly. For private agents
+      // the server mints a short-lived signedUrl via the ElevenLabs REST API
+      // and returns that instead; the API key stays on the server.
+      agentId?: string;
+      signedUrl?: string;
       memoryBlob: string;
       friendship: number;
-    };
+    }
+  // Mid-conversation system message piped into the agent via
+  // sendContextualUpdate. Used to feed in-game events to the active session
+  // (damage taken, player ran away, kill score, etc.) so the agent can react
+  // in voice. Text format: "[System: ...]".
+  | { type: 'npc_alert'; npcId: string; sessionId: string; text: string };
 
 export const encode = <T>(msg: T): string => JSON.stringify(msg);
 export const decode = <T>(raw: string): T => JSON.parse(raw) as T;

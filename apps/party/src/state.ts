@@ -51,6 +51,23 @@ export interface ServerPlayer extends PlayerState {
   // Recently chosen patrol goal node indices — drives variety in
   // pickExplorationGoal so bots don't oscillate between the same two nodes.
   botVisitedRecent?: number[];
+  // Player id this NPC is currently in a voice conversation with. Set by
+  // server.handleVoiceSessionStart, cleared on voice_session_end / player
+  // disconnect. tickBot freezes movement and faces this player when set
+  // (unless interrupted by hostility-driven engage).
+  botConversationWith?: string | null;
+  // Conversation-session id active with `botConversationWith`. Used by the
+  // server to address npc_alert messages back to the right session — the
+  // SDK uses sessionId to discard stale alerts after a reconnect.
+  botActiveSessionId?: string | null;
+  // Player id the NPC is currently following (because the agent called the
+  // follow_player tool during a session). tickBot path-finds toward this
+  // player while patrol/engage haven't taken precedence.
+  botFollowing?: string | null;
+  // Player id the NPC is fleeing FROM (because the agent called flee_from).
+  // `until` is a wall-clock deadline after which fleeing decays back to
+  // patrol unless re-triggered.
+  botFleeingFrom?: { id: string; until: number } | null;
 }
 
 export const initialPlayer = (

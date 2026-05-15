@@ -8,6 +8,7 @@ import { Minimap } from './ui/Minimap.js';
 import { Scoreboard } from './ui/Scoreboard.js';
 import { ConsentGate, getStoredConsent } from './ui/ConsentGate.js';
 import { MuteIndicator } from './ui/MuteIndicator.js';
+import { VoiceDebug } from './ui/VoiceDebug.js';
 import { installVoiceManager, teardownVoiceManager } from './voice/manager.js';
 import { installMuteControls } from './voice/mute.js';
 import { useGame } from './store.js';
@@ -70,6 +71,7 @@ export const App = () => {
       <Minimap />
       <Scoreboard />
       <MuteIndicator />
+      <VoiceDebug />
       <button onClick={onLeave} style={leaveBtn}>
         Leave
       </button>

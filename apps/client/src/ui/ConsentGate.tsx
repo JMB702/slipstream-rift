@@ -41,22 +41,36 @@ export const ConsentGate = ({ onAgree }: Props) => {
   return (
     <div style={overlay}>
       <div style={card}>
-        <h1 style={h1}>Voice chat with NPCs</h1>
-        <p style={p}>
-          Slipstream-NPC lets you talk to AI-voiced NPCs while you explore the arena.
-          Before you join, please read what that involves.
+        <h1 style={h1}>You are about to talk to AI characters</h1>
+        <p style={pStrong}>
+          The NPCs in Slipstream-NPC are not humans. They are AI agents powered by{' '}
+          <a style={a} href="https://elevenlabs.io" target="_blank" rel="noreferrer">
+            ElevenLabs
+          </a>
+          {' '}Conversational AI. You are interacting with software, not with another
+          person, whenever you talk to a character in this game.
         </p>
-        <ul style={ul}>
-          <li>Your microphone audio is sent in real time to ElevenLabs, a third party that powers the NPC voice agents.</li>
-          <li>The audio is transcribed. Transcripts are stored on the game server so NPCs can remember conversations with you across sessions.</li>
-          <li>Raw audio is not stored. Only transcripts are persisted.</li>
-          <li>You can mute the microphone at any time during play (M on keyboard, Y on Xbox controller). When muted, your audio is not captured or transmitted.</li>
-          <li>Voice chat only activates when you walk close to an NPC. There is no recording outside those proximity bubbles.</li>
-        </ul>
         <p style={p}>
-          Florida is a two-party-consent jurisdiction. By proceeding you confirm
-          that you and anyone you share your microphone with consent to the recording
-          and transcription described above.
+          By clicking <strong>Agree</strong> below and each time you interact with an
+          AI agent in this game, you consent to us, ElevenLabs, and each of our service
+          providers (including third-party large language model providers) recording,
+          viewing, storing, and sharing your communications to provide the service,
+          improve our products and services, train machine learning models, and comply
+          with applicable law.
+        </p>
+        <p style={pHeader}>What this means in practice:</p>
+        <ul style={ul}>
+          <li>Your microphone audio is sent in real time to ElevenLabs.</li>
+          <li>It is transcribed. Transcripts are stored on the game server so NPCs can remember conversations with you across sessions.</li>
+          <li>Raw audio is not retained by Slipstream-NPC; ElevenLabs and its LLM providers may retain audio and transcripts under their own policies.</li>
+          <li>Voice chat only activates when you walk close to an NPC. There is no recording outside those proximity bubbles.</li>
+          <li>You can mute the microphone at any time (M on keyboard, Y on Xbox controller). When muted, your audio is not captured or transmitted.</li>
+        </ul>
+        <p style={pSmall}>
+          Florida is a two-party-consent jurisdiction. By proceeding you confirm that
+          you and anyone whose voice may be captured by your microphone consent to the
+          recording and transcription described above. If a player is under 13, do not
+          proceed.
         </p>
         <label style={check}>
           <input
@@ -65,10 +79,10 @@ export const ConsentGate = ({ onAgree }: Props) => {
             onChange={(e) => setChecked(e.target.checked)}
             style={checkbox}
           />
-          I agree to the terms above.
+          I am 13 or older and I agree to the terms above.
         </label>
         <button onClick={onAccept} disabled={!checked} style={checked ? btnOn : btnOff}>
-          Continue to lobby
+          Agree and continue
         </button>
       </div>
     </div>
@@ -97,6 +111,10 @@ const card: React.CSSProperties = {
 };
 const h1: React.CSSProperties = { fontSize: 22, margin: '0 0 12px' };
 const p: React.CSSProperties = { fontSize: 14, margin: '0 0 12px', opacity: 0.9 };
+const pStrong: React.CSSProperties = { fontSize: 14, margin: '0 0 14px', lineHeight: 1.5 };
+const pHeader: React.CSSProperties = { fontSize: 13, margin: '0 0 6px', opacity: 0.8 };
+const pSmall: React.CSSProperties = { fontSize: 12, margin: '0 0 12px', opacity: 0.7, lineHeight: 1.45 };
+const a: React.CSSProperties = { color: '#7aa8ff', textDecoration: 'underline' };
 const ul: React.CSSProperties = { fontSize: 13, margin: '0 0 12px', paddingLeft: 18, opacity: 0.9 };
 const check: React.CSSProperties = {
   display: 'flex',
