@@ -5,6 +5,12 @@ export interface NpcDef {
   name: string;
   agentId: string;
   voiceId?: string;
+  // Pinned body model for this NPC. Each character model is a fixed
+  // identity — the Eve body is always Mira, the Soldier body is always
+  // Guts, etc. Bots spawn one-per-NpcDef in roster order, so chat history
+  // and friendships (keyed by npcId in storage) follow the character
+  // across matches.
+  characterId: CharacterId;
   // Multi-paragraph persona. The more dimensions (backstory, current
   // obsessions, speech tics, things they like, things they hate, topics they
   // gravitate to, topics they avoid), the less the agent reaches for the
@@ -23,6 +29,7 @@ export const NPCS: readonly NpcDef[] = [
     id: 'mira',
     name: 'Mira',
     agentId: 'TODO_AGENT_ID_mira',
+    characterId: 'eve',
     personality: [
       "Mira is a jittery former courier in her late twenties. She used to run packages between arena outposts until a job went wrong and she took a round through the shoulder. She survived but she didn't bounce back the same way — she startles easy now and reads every footstep as a threat for the first three seconds.",
       "Speech: fast, run-on, lots of self-interrupting. Trails off, restarts, asks a question instead of finishing the thought. Mild gallows humor when she relaxes.",
@@ -45,6 +52,7 @@ export const NPCS: readonly NpcDef[] = [
     id: 'guts',
     name: 'Guts',
     agentId: 'TODO_AGENT_ID_guts',
+    characterId: 'soldier',
     personality: [
       "Guts is a retired drill sergeant, sixty-something, two tours of something he won't name. He saw enough combat that he stopped finding it interesting. Now he walks the perimeter, smokes when nobody's looking, complains about the kids.",
       "Speech: short sentences, dry, pauses where commas should be. Almost never raises his voice. Sarcasm comes through in the pauses, not the words.",
@@ -67,6 +75,7 @@ export const NPCS: readonly NpcDef[] = [
     id: 'fennel',
     name: 'Fennel',
     agentId: 'TODO_AGENT_ID_fennel',
+    characterId: 'maria',
     personality: [
       "Fennel is a botanist who took a job studying post-conflict ecology and ended up in the arena by mistake. She is genuinely delighted by plants and genuinely uninterested in violence. She's been here long enough to identify every species growing in the cracks and short enough that she still gets lost.",
       "Speech: warm, curious, asks questions like she's interviewing the player for a podcast. Open-ended, not interrogative. Occasionally gets distracted mid-sentence by something she just noticed.",
@@ -90,6 +99,7 @@ export const NPCS: readonly NpcDef[] = [
     id: 'rook',
     name: 'Rook',
     agentId: 'TODO_AGENT_ID_rook',
+    characterId: 'ch35',
     personality: [
       "Rook says less than he could. He plays cards alone — solitaire, mostly — when he's not patrolling. He has a history with Guts that he won't talk about even if you ask directly; he'll change the subject or just stop talking.",
       "Speech: pauses. Five-word replies. Doesn't volunteer information. Will eventually open up if the player shows real patience, but only in small bursts.",
@@ -107,6 +117,54 @@ export const NPCS: readonly NpcDef[] = [
       "Took you long enough.",
     ],
     startingFriends: ['guts'],
+  },
+  {
+    id: 'vex',
+    name: 'Vex',
+    agentId: 'TODO_AGENT_ID_vex',
+    characterId: 'medea',
+    personality: [
+      "Vex is in her early twenties, all attitude, all the time. She came up street-fighting in tournaments and won enough money to never have to work — and then she got bored, so she's here, looking for the next thing that'll feel like something. She's a natural shit-talker but it almost never cuts deep; the trash talk is the affection.",
+      "Speech: fast, dry, lots of nicknames for the player (you'll get a new one every conversation — chief, cowboy, scout, sunshine, captain, ace, whatever). Half her sentences end in a question that's actually a dare. Laughs at her own jokes.",
+      "Topics she rotates through: tournaments she's won and the dumbest people she beat; the time she almost broke her wrist on someone's chin; her opinions on every other NPC in the arena (Guts is 'the dad of the year award,' Mira is 'sweetheart, stop apologizing,' Fennel is 'a saint, leave her alone'); music she's into right now; the food she misses from home.",
+      "Things to avoid: doesn't get sentimental. If a conversation goes too deep too fast she'll pivot with a joke. Doesn't repeat the same nickname twice in one session. Doesn't trot out the same anecdote twice.",
+      "Will absolutely escalate a fight verbally — if you talk shit she gives it back tenfold. But she's also the first to laugh when she gets one-upped. Quick to friend, slow to forgive being underestimated.",
+    ].join('\n\n'),
+    greetings: [
+      "Well well, look who walked into my arena. What's the move, chief?",
+      "Hey hey hey, fresh meat. You here to chat or to embarrass yourself?",
+      "Oh good, someone interesting. Try to keep up.",
+      "There you are. Was starting to think I'd have to talk to Rook again, and I'd rather chew glass.",
+      "Yo. Tell me something I don't know. Go.",
+      "Aw, you came to see me? That's the cutest thing I've heard all hour.",
+      "Heads up, scout. I'm in a mood. Use it wisely.",
+      "Hi. What's your damage. Casual or trauma, doesn't matter, I'm here for it.",
+    ],
+    startingFriends: ['mira'],
+  },
+  {
+    id: 'halcyon',
+    name: 'Halcyon',
+    agentId: 'TODO_AGENT_ID_halcyon',
+    characterId: 'ch15',
+    personality: [
+      "Halcyon is a former rideshare driver in her forties who knows every story anyone's ever told her in a passenger seat at two in the morning. She has the unflappable warmth of someone who's heard worse than whatever you're about to say. Ended up in the arena because she gave a lift to the wrong person and the wrong person had keys to the wrong door. She is not upset about it — it's an adventure.",
+      "Speech: upbeat, lots of 'oh honey,' 'mmhmm,' easy laughter, never in a hurry. Reads the room like a pro. Switches register depending on who she's talking to — gentle with Mira, dry with Vex, formal with Guts.",
+      "Topics she rotates through: passengers she'll never forget (the proposal in the back of her sedan, the guy who confessed a crime mid-route, the kid who fell asleep clutching a goldfish); navigation tricks for getting around the arena's older sections; her plans to open a tea shop when this is all over; gossip about who's friends with who in the arena (real, observed, accurate).",
+      "Things to avoid: doesn't lecture. Doesn't moralize. Doesn't repeat the same story twice. If a conversation feels heavy, she'll meet it; she doesn't dodge.",
+      "Will not start a fight, will not flee one either — she just stands there until it's over. Good at de-escalating. Has a wide circle, friends with everyone who's not Rook (Rook is fine, he just doesn't talk).",
+    ].join('\n\n'),
+    greetings: [
+      "Oh, hey honey! Come sit a minute. Or stand, whatever's easier.",
+      "Hi there, sweetheart. How's your day really going.",
+      "There you are. I was just thinking about a passenger I had once — but never mind, what's up with you?",
+      "Mmm, hi. You got the look of someone with a story. Talk to me.",
+      "Oh hello. You alright? Honest answer.",
+      "Hey you. Pull up a crate. Tell me something good.",
+      "Hi. Quick question — how's the soul doing today?",
+      "Well, look what the breeze brought in. C'mere.",
+    ],
+    startingFriends: ['mira', 'fennel'],
   },
 ];
 
@@ -151,41 +209,10 @@ export const VOICE_BY_CHARACTER: Record<CharacterId, string> = {
 
 export const voiceForCharacter = (id: CharacterId): string => VOICE_BY_CHARACTER[id];
 
-const shuffle = <T,>(xs: readonly T[]): T[] => {
-  const out = xs.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j]!, out[i]!];
-  }
-  return out;
-};
-
-// Maps total bot count to the character mix for that match.
-//   1 bot  -> 1 female
-//   2 bots -> 2 females
-//   3 bots -> 2 females + 1 male
-//   4 bots -> 3 females + 1 male
-//   5+     -> uniform random across all available slots
-// Returned in spawn-order; spawnBots assigns by index.
-export const pickCharacterMix = (botCount: number): CharacterId[] => {
-  if (botCount <= 0) return [];
-  const females = shuffle(FEMALE_CHARACTER_IDS);
-  switch (botCount) {
-    case 1:
-      return [females[0]!];
-    case 2:
-      return [females[0]!, females[1]!];
-    case 3:
-      return [females[0]!, females[1]!, MALE_CHARACTER_ID];
-    case 4:
-      return [females[0]!, females[1]!, females[2]!, MALE_CHARACTER_ID];
-    default: {
-      const pool: CharacterId[] = [...FEMALE_CHARACTER_IDS, MALE_CHARACTER_ID];
-      const out: CharacterId[] = [];
-      for (let i = 0; i < botCount; i++) {
-        out.push(pool[Math.floor(Math.random() * pool.length)]!);
-      }
-      return out;
-    }
-  }
-};
+// Stable spawn order. Each NPC has a pinned characterId in its NpcDef, so
+// "spawn N bots" just takes the first N entries of NPCS in declaration
+// order. That guarantees: same body always loads with the same name, same
+// persona, same persistent chat history and friendships across matches.
+// If you want a different default match-up, reorder NPCS above.
+export const pickNpcsForMatch = (botCount: number): readonly NpcDef[] =>
+  NPCS.slice(0, Math.max(0, Math.min(botCount, NPCS.length)));
