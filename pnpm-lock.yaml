@@ -23,7 +23,7 @@ importers:
       '@react-three/fiber':
         specifier: ^8.17.10
         version: 8.18.0(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.171.0)
-      '@slipstream/shared':
+      '@slipstream-npc/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       partysocket:
@@ -63,7 +63,7 @@ importers:
 
   apps/party:
     dependencies:
-      '@slipstream/shared':
+      '@slipstream-npc/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       partykit:

@@ -1,7 +1,7 @@
 import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Suspense, useState } from 'react';
-import { PLAYER, type CharacterId, type PlayerId, type Vec3 } from '@slipstream/shared';
+import { PLAYER, type CharacterId, type PlayerId, type Vec3 } from '@slipstream-npc/shared';
 import { Character } from './Character.js';
 import { getLastAimedAt } from './aim-state.js';
 import { useGame } from '../store.js';

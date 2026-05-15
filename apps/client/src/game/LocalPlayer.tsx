@@ -9,7 +9,7 @@ import {
   type InputFrame,
   type MovableState,
   type Vec3,
-} from '@slipstream/shared';
+} from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
 import { createInput } from './input.js';
 import { setActiveInput, setPredictedState, consumeFire } from './local-state.js';

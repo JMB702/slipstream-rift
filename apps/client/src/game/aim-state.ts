@@ -4,7 +4,7 @@ import {
   rayCapsuleVertical,
   raycastObstacles,
   type Vec3,
-} from '@slipstream/shared';
+} from '@slipstream-npc/shared';
 
 // Last time (performance.now() ms) the local player's aim was on each remote
 // player. Updated once per frame from LocalPlayer; read every frame from

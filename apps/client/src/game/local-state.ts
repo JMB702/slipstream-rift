@@ -1,4 +1,4 @@
-import { PLAYER, type MovableState } from '@slipstream/shared';
+import { PLAYER, type MovableState } from '@slipstream-npc/shared';
 import type { InputState } from './input.js';
 import type { createInput } from './input.js';
 

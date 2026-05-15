@@ -13,15 +13,15 @@
 // - Don't bake in the live access code — players type that themselves.
 export const CLONE_PROMPT = `You are going to help me propose changes to a live multiplayer game called Slipstream. The repo is public; the live game is gated behind code-owner review on the PR plus a manual deploy step that only the maintainer runs. We work as a pair: I describe what I want, you make the change as a pull request, the maintainer decides whether it ships.
 
-Repo: https://github.com/JMB702/slipstream
-Live game: https://slipstream-sand.vercel.app
+Repo: https://github.com/JMB702/slipstream-npc
+Live game: TBD (fork is not yet linked to a Vercel deploy)
 
 ONE-TIME SETUP
 
 1. Make sure 'gh' CLI and 'pnpm' are installed and you are signed into GitHub.
 2. Fork and clone:
-   - gh repo fork JMB702/slipstream --clone --remote
-   - cd slipstream
+   - gh repo fork JMB702/slipstream-npc --clone --remote
+   - cd slipstream-npc
    - pnpm install
 3. Sanity check:
    - pnpm typecheck
@@ -41,8 +41,8 @@ When I ask for a change:
 5. Verify locally: pnpm typecheck (always) and pnpm dev for behavioral changes.
 6. Commit with a message that explains WHY, not just what.
 7. Push the branch: git push origin <branch>
-8. Open a pull request against JMB702/slipstream main:
-   - gh pr create --repo JMB702/slipstream --title "<short title>" --body "<what + why + how to test>"
+8. Open a pull request against JMB702/slipstream-npc main:
+   - gh pr create --repo JMB702/slipstream-npc --title "<short title>" --body "<what + why + how to test>"
 9. Give me the PR URL. I review and merge.
 
 DEPLOYMENT
@@ -54,7 +54,7 @@ You don't run any deploy commands yourself. Don't add 'vercel --prod' or 'partyk
 GROUND RULES
 
 - Public repo. Don't commit secrets. The .env files in apps/party are gitignored — never copy ACCESS_CODE or similar into source.
-- Don't push to JMB702/slipstream main directly even if you have access. Always go through a PR.
+- Don't push to JMB702/slipstream-npc main directly even if you have access. Always go through a PR.
 - If a request is ambiguous, ask one clarifying question before writing code.
 - If a change spans the wire format (packages/shared/src/state.ts or messages.ts), call that out in the PR description so I know clients and server need to redeploy together.
 - For Mixamo / animation work, follow the asset pipeline section in CLAUDE.md exactly. The merge_mixamo.py script is the source of truth.

@@ -1,4 +1,4 @@
-import { HOUSE_WALLS, MAPS, SCATTERED_OBSTACLES, type Obstacle } from '@slipstream/shared';
+import { HOUSE_WALLS, MAPS, SCATTERED_OBSTACLES, type Obstacle } from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
 import { MapGltf } from './MapGltf.js';
 

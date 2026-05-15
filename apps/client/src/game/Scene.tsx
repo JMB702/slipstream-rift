@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
-import type { ClientMessage } from '@slipstream/shared';
+import type { ClientMessage } from '@slipstream-npc/shared';
 import { Arena } from './Map.js';
 import { LocalPlayer } from './LocalPlayer.js';
 import { RemotePlayers } from './Players.js';

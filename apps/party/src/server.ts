@@ -20,7 +20,7 @@ import {
   type GameSnapshot,
   type ServerMessage,
   type Vec3,
-} from '@slipstream/shared';
+} from '@slipstream-npc/shared';
 import {
   applyInput,
   finishReload,

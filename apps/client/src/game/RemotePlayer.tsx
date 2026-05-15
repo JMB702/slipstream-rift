@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import { Group } from 'three';
-import { NET, type PlayerId } from '@slipstream/shared';
+import { NET, type PlayerId } from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
 import { PlayerModel } from './PlayerModel.js';
 

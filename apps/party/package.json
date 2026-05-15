@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@slipstream/shared": "workspace:*",
+    "@slipstream-npc/shared": "workspace:*",
     "partykit": "^0.0.115",
     "partyserver": "^0.0.71"
   },

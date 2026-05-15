@@ -1,4 +1,4 @@
-import { getActiveMap, raycastObstacles, type MapId, type Vec3 } from '@slipstream/shared';
+import { getActiveMap, raycastObstacles, type MapId, type Vec3 } from '@slipstream-npc/shared';
 
 // Pathing graph derived from the active map's hand-authored or auto-generated
 // waypoints + edge list. Built lazily on first request per map id, then

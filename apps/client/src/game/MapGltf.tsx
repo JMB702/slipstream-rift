@@ -1,5 +1,5 @@
 import { useGLTF } from '@react-three/drei';
-import { MAPS, type MapId } from '@slipstream/shared';
+import { MAPS, type MapId } from '@slipstream-npc/shared';
 
 const URLS: Partial<Record<MapId, string>> = {
   fps_shooter: '/maps/fps_shooter/scene.gltf',

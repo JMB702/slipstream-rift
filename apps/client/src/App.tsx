@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { setActiveMap, type BotDifficulty, type MapId } from '@slipstream/shared';
+import { setActiveMap, type BotDifficulty, type MapId } from '@slipstream-npc/shared';
 import { connect, type NetClient } from './net/client.js';
 import { Scene } from './game/Scene.js';
 import { Lobby } from './ui/Lobby.js';

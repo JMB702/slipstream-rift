@@ -4,7 +4,7 @@ Slipstream is set up as a collaborative AI-coding playground. Players paste a pr
 
 ## How changes get into the live game
 
-1. **Anyone can fork and propose.** The repo is public. Fork it, branch, code, push, and open a PR back to `JMB702/slipstream:main`.
+1. **Anyone can fork and propose.** The repo is public. Fork it, branch, code, push, and open a PR back to `JMB702/slipstream-npc:main`.
 2. **Pull requests are required.** Direct pushes to `main` are blocked by branch protection. Even the maintainer goes through PRs in normal cases.
 3. **A code owner must approve.** GitHub branch protection requires approval from someone listed in [`.github/CODEOWNERS`](./.github/CODEOWNERS) before a PR can merge. Today that's `@JMB702`. Trusted devs can be added to that file over time.
 4. **On merge, the change is NOT live yet.** Deployment is a separate, manual step the maintainer does after reviewing the merged commits:

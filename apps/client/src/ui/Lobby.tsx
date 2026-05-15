@@ -7,7 +7,7 @@ import {
   isMapId,
   type BotDifficulty,
   type MapId,
-} from '@slipstream/shared';
+} from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
 import { CLONE_PROMPT } from './clonePrompt.js';
 
@@ -319,9 +319,9 @@ const button: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const NAME_KEY = 'slipstream:name';
-const CODE_KEY = 'slipstream:accessCode';
-const MAP_KEY = 'slipstream:mapId';
+const NAME_KEY = 'slipstream-npc:name';
+const CODE_KEY = 'slipstream-npc:accessCode';
+const MAP_KEY = 'slipstream-npc:mapId';
 const loadName = () => {
   try {
     return localStorage.getItem(NAME_KEY) ?? '';

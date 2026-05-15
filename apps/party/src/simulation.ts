@@ -13,7 +13,7 @@ import {
   type InputFrame,
   type Vec3,
   type WindowDef,
-} from '@slipstream/shared';
+} from '@slipstream-npc/shared';
 import type { ServerPlayer } from './state.js';
 import { randomSpawn } from './state.js';
 

@@ -1,8 +1,8 @@
 {
-  "name": "slipstream",
+  "name": "slipstream-npc",
   "version": "0.0.0",
   "private": true,
-  "description": "Slipstream — 3D multiplayer 3rd-person shooter",
+  "description": "Slipstream-NPC — peaceful NPCs voiced by ElevenLabs, friendship graph, retaliation only when attacked",
   "packageManager": "pnpm@10.30.3",
   "engines": {
     "node": ">=20"

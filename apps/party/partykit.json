@@ -1,6 +1,6 @@
 {
   "$schema": "https://www.partykit.io/schema.json",
-  "name": "slipstream",
+  "name": "slipstream-npc",
   "main": "src/server.ts",
   "compatibilityDate": "2025-05-01"
 }

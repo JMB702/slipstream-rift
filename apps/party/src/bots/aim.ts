@@ -1,4 +1,4 @@
-import { PLAYER, raycastObstacles, type Vec3 } from '@slipstream/shared';
+import { PLAYER, raycastObstacles, type Vec3 } from '@slipstream-npc/shared';
 import type { ServerPlayer } from '../state.js';
 
 // Eye height for aim-origin: matches client (apps/client/src/game/aim-state.ts)

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../store.js';
-import { PLAYER, WEAPON, type KillEvent } from '@slipstream/shared';
+import { PLAYER, WEAPON, type KillEvent } from '@slipstream-npc/shared';
 import { hapticDamage } from '../game/haptics.js';
 
 const HIT_MARKER_MS = 250;

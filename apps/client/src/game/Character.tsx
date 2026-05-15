@@ -20,7 +20,7 @@ import {
   type AnimationAction,
 } from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { PLAYER, type CharacterId, type PlayerId, type Vec3 } from '@slipstream/shared';
+import { PLAYER, type CharacterId, type PlayerId, type Vec3 } from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
 import { getCameraDist } from './local-state.js';
 import { playGunshot, playHitMarker, playReload } from './sfx.js';

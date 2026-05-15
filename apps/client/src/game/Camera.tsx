@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useRef } from 'react';
 import { PerspectiveCamera } from 'three';
-import { PLAYER, raycastObstacles, type Vec3 } from '@slipstream/shared';
+import { PLAYER, raycastObstacles, type Vec3 } from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
 import { getActiveInput, getPredictedState, setCameraDist } from './local-state.js';
 

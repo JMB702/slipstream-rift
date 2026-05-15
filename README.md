@@ -1,6 +1,6 @@
-# Slipstream
+# Slipstream-NPC
 
-3D third-person multiplayer arena shooter that runs in the browser.
+3D third-person multiplayer browser game. Fork of [Slipstream](https://github.com/JMB702/slipstream) with peaceful NPCs voiced by ElevenLabs Conversational AI: NPCs explore, chat with players, and only shoot back when shot at. Players make friends with NPCs through conversation; NPC friends defend each other.
 
 - **Client:** React + React Three Fiber + Three.js, deployed on Vercel
 - **Server:** PartyKit (authoritative simulation, WebSockets) on Cloudflare Durable Objects
@@ -33,7 +33,7 @@ You need free accounts on [Vercel](https://vercel.com) and [PartyKit](https://ww
 pnpm --filter party deploy
 ```
 
-First run prompts a login. The output prints a host like `slipstream.<your-username>.partykit.dev`. Save that.
+First run prompts a login. The output prints a host like `slipstream-npc.<your-username>.partykit.dev`. Save that.
 
 ### 2. Deploy the client
 
@@ -42,7 +42,7 @@ Push the repo to GitHub and import it into Vercel. Vercel reads `vercel.json` at
 In Vercel project settings → Environment Variables, add:
 
 ```
-VITE_PARTYKIT_HOST = slipstream.<your-username>.partykit.dev
+VITE_PARTYKIT_HOST = slipstream-npc.<your-username>.partykit.dev
 ```
 
 Trigger a redeploy. The client will now talk to your PartyKit server.
@@ -57,7 +57,7 @@ apps/
   party/            PartyKit server. Authoritative simulation at 30 Hz.
 packages/
   shared/           TypeScript types for messages, state, constants.
-                    Imported by both client and party as `@slipstream/shared`.
+                    Imported by both client and party as `@slipstream-npc/shared`.
 vercel.json         Pins build/output for Vercel.
 ```
 

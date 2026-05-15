@@ -1,10 +1,11 @@
-# Slipstream — project guide for Claude
+# Slipstream-NPC — project guide for Claude
 
-3D third-person multiplayer arena shooter that runs in the browser. Client deploys to Vercel; multiplayer server is PartyKit (Cloudflare Durable Objects). Server is authoritative — clients send input intent, server simulates.
+Fork of [Slipstream](https://github.com/JMB702/slipstream). Same engine; different social contract: NPCs are peaceful by default, voiced by ElevenLabs Conversational AI, retaliate only when shot at. Players make friends with NPCs through conversation; NPC friends defend each other.
 
-- **Repo**: https://github.com/JMB702/slipstream (public; PR-gated, code-owner approval required)
-- **Live game**: https://slipstream-sand.vercel.app (4-digit access code in the lobby)
-- **PartyKit prod**: `wss://slipstream.jmb702.partykit.dev`
+- **Repo**: https://github.com/JMB702/slipstream-npc
+- **Live game**: TBD (Vercel deploy not yet linked for this fork)
+- **PartyKit prod**: `wss://slipstream-npc.jmb702.partykit.dev` (project not yet deployed)
+- **Upstream (Slipstream)**: https://github.com/JMB702/slipstream — combat-only deathmatch parent project. Most engine docs below are inherited from upstream.
 
 ## Stack
 
@@ -117,7 +118,7 @@ pnpm build
 pnpm deploy:party      # PartyKit deploy (requires Adobe-free PartyKit login)
 ```
 
-`vercel.json` at the repo root pins client builds for Vercel. `VITE_PARTYKIT_HOST` is set as a Vercel project env var (production scope) pointing at `slipstream.jmb702.partykit.dev`. `apps/party/.env` (gitignored) holds `ACCESS_CODE=<4 digits>` for local dev — the `partykit dev` server reads it on startup.
+`vercel.json` at the repo root pins client builds for Vercel. `VITE_PARTYKIT_HOST` is set as a Vercel project env var (production scope) pointing at `slipstream-npc.jmb702.partykit.dev`. `apps/party/.env` (gitignored) holds `ACCESS_CODE=<4 digits>` for local dev — the `partykit dev` server reads it on startup.
 
 ### Deployment (manual; not auto-on-merge)
 
@@ -252,3 +253,80 @@ Things that are wired but not yet polished. Pick these up in order of player-vis
 - Don't add comments narrating what the code does. Names + tests do that.
 - Don't introduce backwards-compat shims for code paths the user is fine changing.
 - Don't `git add -A` blindly after generating large artifacts — check `git status` first to catch the next 246MB FBX commit before it lands.
+
+---
+
+# Fork-specific: NPC voice + friendship system
+
+Everything above this section is inherited from upstream Slipstream and applies verbatim. The section below documents the fork's additions.
+
+## Social contract
+
+- **NPCs are peaceful by default.** Bot AI (`apps/party/src/bots/controller.ts`) still patrols and explores, but `findVisibleTarget` is replaced with `findVisibleHostileTarget` — bots only consider players hostile if the social state says they are.
+- **Hostility is shooter-keyed and time-decayed.** When a shot lands on a player (server confirms hit in `tryFire`), `social.markAttack(shooterName, victimId)` pushes a `HostilityEntry { towardsName, until }` onto the victim AND every player in `victim.friendsWith`. `HOSTILITY_MS = 30_000`. Pruned each tick. After it expires the NPC returns to patrol.
+- **Friendship is a real graph.** Both NPCs and humans can have `friendsWith: string[]`. NPCs start with seed friendships from the roster. Players earn NPC friendship via conversation: the ElevenLabs agent has a `make_friend(player_name)` tool that webhooks back into PartyKit (`POST /tools/make_friend`).
+- **Friendship is authoritative on the server.** Stored in PartyKit Durable Object storage keyed by `friend:<npcId>:<playerName>`. Survives room restarts.
+
+## Voice topology (V1)
+
+- **Per-player 1:1 ConvAI sessions.** Each player runs its own ElevenLabs Conversational AI session with whichever NPC is in proximity. Browser ↔ ElevenLabs direct WebRTC; PartyKit is not in the audio path.
+- **NPC memory is the bridge between sessions.** On `voice_session_start`, the server returns an `npc_context` message with a 2KB memory blob: friendship score + last 10 lines with this player + last 5 lines with anyone recently in earshot of this NPC. The agent receives the blob as a session prompt override, so the same NPC "remembers" what other players said.
+- **Other players in earshot hear the agent's TTS** via a PartyKit-broadcast `npc_audio` event, played positionally on listener clients (PannerNode HRTF). Speaker mic stays direct to ElevenLabs.
+- **Always-on, proximity-gated mic** within `NPC_VOICE_RADIUS = 5m` with 0.5m hysteresis. At most one session at a time per local player; closest wins on overlap.
+- **Mute** is keyboard `M` plus Xbox controller button (Y or LSB). Muted = `track.enabled = false`; session stays open so NPC voice is still heard.
+
+### Known limitation
+V1 is per-listener sessions, not true N→1→N multi-speaker. Agent has cross-player context via memory blob but each response is driven by one speaker. True multi-speaker bridge (server-side STT per stream, single LLM conversation, broadcast TTS) is deferred to V2.
+
+## Identity & consent
+
+- **Player identity is `hello.name`** for v1. Two players named "Bob" share friendship and transcript state. Real fix is a per-player UUID flow — track as future work.
+- **Voice recording requires consent.** `ConsentGate.tsx` renders before `Lobby.tsx`; checkbox covers voice recording, transcription, storage, and third-party (ElevenLabs) transmission. Florida is a two-party-consent state — do not bypass this gate. Consent is stored both in `localStorage` (`slipstream_consent_v1`) and server-side (Durable Object `consent:<playerName>`).
+
+## Wire types (additions to `packages/shared/src/messages.ts`)
+
+`ClientMessage`:
+- `consent { agreed, version }`
+- `voice_session_start { npcId, sessionId }`
+- `voice_session_end { sessionId }`
+- `transcript { npcId, sessionId, role: 'user' | 'agent', text, at }`
+
+`ServerMessage`:
+- `consent_required { version }`
+- `npc_context { npcId, sessionId, memoryBlob, friendship }`
+- `npc_audio` — broadcast TTS frames for listeners (V1 may use existing pubsub; V2 needs binary)
+
+## Where things live (new files in this fork)
+
+```
+packages/shared/src/npc-roster.ts    — NPC personas (id, name, agentId, voiceId, personality, startingFriends)
+apps/party/src/social.ts             — markAttack, isHostileTo, pruneHostility
+apps/party/src/storage.ts            — Durable Object: friendship + transcripts + consent + memoryBlob composition
+apps/client/src/voice/
+  mic.ts                             — getUserMedia + permission flow
+  ConvAISession.ts                   — @elevenlabs/client wrapper, per-NPC session
+  proximity.ts                       — distance-gated session start/stop
+  spatial.ts                         — PannerNode HRTF for NPC voice
+  mute.ts                            — global mute singleton (keyboard + gamepad)
+apps/client/src/ui/ConsentGate.tsx   — pre-lobby consent
+apps/client/src/ui/MuteIndicator.tsx — HUD widget
+```
+
+## ElevenLabs agent setup
+
+Agents are authored in the ElevenLabs dashboard (one per NPC personality). For each agent:
+1. Set system prompt with NPC's full personality.
+2. Add a `make_friend` tool (Webhook) pointing at `https://<partykit-host>/parties/main/<roomId>/tools/make_friend`. Body schema:
+   ```json
+   { "npcId": "string", "playerName": "string", "sessionId": "string", "secret": "string" }
+   ```
+3. The secret is shared via `ELEVENLABS_AGENT_TOOL_SECRET` (set in `apps/party/.env` and in the agent's dashboard config).
+
+See `docs/elevenlabs-setup.md` (to be written) for copy-pasteable JSON.
+
+## What NOT to do (fork additions)
+
+- Don't put microphone audio through PartyKit in V1. Browser → ElevenLabs direct keeps audio off the Workers runtime, which has tight limits on long-running streams.
+- Don't trust client-side friendship claims. Server is authoritative; client just renders what comes back in snapshots and `npc_context`.
+- Don't bypass `ConsentGate` for testing convenience — Florida two-party consent applies. If you need a dev mode, document it explicitly and gate on a Vite env var so it can't ship.
+- Don't store raw audio. Only transcripts are persisted (and only with consent).

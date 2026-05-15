@@ -13,7 +13,7 @@
                   (TypeScript wire types)
 ```
 
-`packages/shared` is the source of truth for the wire protocol. Both apps import it as `@slipstream/shared`. Anything that crosses the wire MUST be defined there.
+`packages/shared` is the source of truth for the wire protocol. Both apps import it as `@slipstream-npc/shared`. Anything that crosses the wire MUST be defined there.
 
 ## Networking lifecycle
 
@@ -117,5 +117,5 @@ Forward direction: most Mixamo / RPM models face -z in their own space, which ma
 ## Conventions
 
 - TypeScript strict mode, ESM throughout, `.js` import extensions in TS source (per Node ESM resolver — Vite doesn't care, the server build does).
-- Wire types live in `@slipstream/shared`. Don't duplicate them.
-- Constants go in `@slipstream/shared/constants` even when used only on one side. Keeps tuning in one file.
+- Wire types live in `@slipstream-npc/shared`. Don't duplicate them.
+- Constants go in `@slipstream-npc/shared/constants` even when used only on one side. Keeps tuning in one file.

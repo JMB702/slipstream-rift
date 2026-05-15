@@ -7,7 +7,7 @@ import {
   type MapId,
   type PlayerId,
   type PlayerState,
-} from '@slipstream/shared';
+} from '@slipstream-npc/shared';
 
 export type ConnState = 'idle' | 'connecting' | 'connected' | 'disconnected';
 

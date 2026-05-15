@@ -1,4 +1,4 @@
-import { PLAYER, getActiveMap, type CharacterId, type PlayerState, type Vec3 } from '@slipstream/shared';
+import { PLAYER, getActiveMap, type CharacterId, type PlayerState, type Vec3 } from '@slipstream-npc/shared';
 
 export type BotState = 'patrol' | 'hunt' | 'engage' | 'reposition' | 'dead';
 

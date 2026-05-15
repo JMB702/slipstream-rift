@@ -1,4 +1,4 @@
-import { MAPS } from '@slipstream/shared';
+import { MAPS } from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
 
 const SIZE = 160;

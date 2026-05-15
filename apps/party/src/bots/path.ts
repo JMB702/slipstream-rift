@@ -1,4 +1,4 @@
-import type { Vec3 } from '@slipstream/shared';
+import type { Vec3 } from '@slipstream-npc/shared';
 import { getNavGraph, hasLineOfSight, nearestReachableNode } from './waypoints.js';
 
 // A* over the small (16-node) waypoint graph. Returns a list of world-space

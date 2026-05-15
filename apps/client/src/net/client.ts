@@ -6,7 +6,7 @@ import {
   type ClientMessage,
   type MapId,
   type ServerMessage,
-} from '@slipstream/shared';
+} from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
 
 const urlHost =

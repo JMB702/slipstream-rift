@@ -6,7 +6,7 @@ import {
   type BotProfile,
   type InputFrame,
   type Vec3,
-} from '@slipstream/shared';
+} from '@slipstream-npc/shared';
 import type { ServerPlayer } from '../state.js';
 import { applyInput } from '../simulation.js';
 import { planPath, randomPatrolGoal } from './path.js';
