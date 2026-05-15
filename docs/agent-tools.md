@@ -1,4 +1,26 @@
-# Registering the 4 webhook tools in ElevenLabs
+# Dashboard setup checklist
+
+Two manual setup steps in the ElevenLabs dashboard at
+`https://elevenlabs.io/app/agents/agents/agent_2801krp7phr1fjat8f1f2yq7mvkt`:
+
+## 1. Enable the "Voice" override (one-time)
+
+Per-character voices (Eve → Sarah, Maria → Alice, Medea → Laura, etc., see
+[`packages/shared/src/npc-roster.ts`](../packages/shared/src/npc-roster.ts)
+`VOICE_BY_CHARACTER`) need the agent to accept a per-session `voiceId`
+override. The toggle is OFF by default, same gotcha as System prompt and
+First message.
+
+- **Tab:** Security → Overrides
+- **Toggle:** `Voice` (currently off → flip on)
+- Leave Voice speed / stability / similarity off — we don't override those.
+- Click **Publish** at the top right.
+
+After this, the next session start passes the right voiceId per character
+model and you'll hear distinct voices on Eve / Maria / Medea / Matilda /
+Soldier / Bill bodies.
+
+## 2. Registering the 4 webhook tools in ElevenLabs
 
 The Slipstream-NPC agent calls four webhooks during conversations:
 

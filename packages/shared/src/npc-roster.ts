@@ -119,6 +119,38 @@ export const npcById = (id: string): NpcDef | null =>
 export const FEMALE_CHARACTER_IDS: readonly CharacterId[] = ['eve', 'maria', 'medea'];
 export const MALE_CHARACTER_ID: CharacterId = 'soldier';
 
+// ElevenLabs premade voice ids per character model. Each voice was picked
+// to be distinct from the others on age, accent, and demeanor so the player
+// can audibly tell which body they're hearing without looking at the
+// nameplate. Sourced from the public voice library — stable ids, no auth
+// needed for the agent to use them.
+//
+// To audition or swap a voice: open the ElevenLabs dashboard → Voices →
+// search by id. Pasting a new id here is sufficient; no other code change
+// needed. The "Voice" override toggle on the agent's Security tab must
+// stay enabled or the agent will reject our session override and fall
+// back to the dashboard default.
+export const VOICE_BY_CHARACTER: Record<CharacterId, string> = {
+  // Eric — middle-aged American male, smooth and trustworthy. Same voice
+  // as the dashboard default so live matches without a session override
+  // sound consistent.
+  soldier: 'cjVigY5qzO86Huf0OWal',
+  // Sarah — young American female, mature and reassuring.
+  eve: 'EXAVITQu4vr4xnSDxMaL',
+  // Alice — middle-aged British female, clear and professional.
+  maria: 'Xb7hH8MSUJpSbSDYk0k2',
+  // Laura — young American female, sassy and playful.
+  medea: 'FGY2WhTYpPnrIDTdsKH5',
+  // Matilda — middle-aged American female, upbeat and knowledgable.
+  // Distinct from eve/maria/medea on demeanor + age combo.
+  ch15: 'XrExE9yKIg1WjnnlVkGX',
+  // Bill — older American male, wise and mature. Distinct from soldier
+  // on age so a Bill-character feels older than a soldier-character.
+  ch35: 'pqHfZKP75CvOlQylNhV4',
+};
+
+export const voiceForCharacter = (id: CharacterId): string => VOICE_BY_CHARACTER[id];
+
 const shuffle = <T,>(xs: readonly T[]): T[] => {
   const out = xs.slice();
   for (let i = out.length - 1; i > 0; i--) {

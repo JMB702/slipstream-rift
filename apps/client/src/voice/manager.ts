@@ -1,6 +1,7 @@
 import {
   NPC_VOICE,
   npcById,
+  voiceForCharacter,
   type ClientMessage,
   type ServerMessage,
   type Vec3,
@@ -238,11 +239,21 @@ const startSession = async (npcId: string): Promise<void> => {
   });
   active = session;
   useGame.getState().setActiveVoiceSession({ npcId, sessionId, npcName: npc.name });
+  // Voice follows the bot's current character MODEL, not the NPC persona —
+  // Mira might be Eve in this match and Maria in the next; the body model
+  // is what determines the voice the player hears. Roster.voiceId, if set,
+  // overrides everything (handy for hand-tuned per-NPC voices later).
+  const lastSnap = useGame.getState().snapshots.slice(-1)[0];
+  const liveBot = lastSnap
+    ? Array.from(lastSnap.players.values()).find((p) => p.isBot && p.npcId === npcId)
+    : undefined;
+  const characterVoice = liveBot ? voiceForCharacter(liveBot.characterId) : undefined;
+  const resolvedVoice = npc.voiceId ?? characterVoice;
   await session.start({
     ...(ctxMsg.agentId ? { agentId: ctxMsg.agentId } : {}),
     ...(ctxMsg.signedUrl ? { signedUrl: ctxMsg.signedUrl } : {}),
     memoryBlob: ctxMsg.memoryBlob,
-    ...(npc.voiceId ? { voiceId: npc.voiceId } : {}),
+    ...(resolvedVoice ? { voiceId: resolvedVoice } : {}),
   });
   session.setMuted(isMuted());
   starting = false;
