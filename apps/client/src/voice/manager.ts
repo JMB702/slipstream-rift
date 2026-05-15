@@ -253,19 +253,30 @@ const startSession = async (npcId: string): Promise<void> => {
         useGame.getState().setVoiceLastError(null);
       } else if (status === 'error') {
         useGame.getState().setVoiceLastError('SDK reported error — see console');
-      } else if (status === 'ended' && connectedAt > 0) {
-        const lifetimeMs = Date.now() - connectedAt;
-        if (lifetimeMs < 1500 && !modeChanged && sentVoiceId) {
-          suppressVoiceOverride = true;
-          console.warn(
-            `[voice] session ${npcId} died ${lifetimeMs}ms after connect with no audio. ` +
-              `Treating as a Voice-override rejection — falling back to dashboard default voice ` +
-              `for the rest of this page session. To use per-character voices, toggle "Voice" ON ` +
-              `in the agent's Security tab → Overrides and republish.`,
-          );
-          useGame.getState().setVoiceLastError(
-            'Voice override rejected — enable Voice in agent Security tab',
-          );
+      } else if (status === 'ended') {
+        if (connectedAt > 0) {
+          const lifetimeMs = Date.now() - connectedAt;
+          if (lifetimeMs < 1500 && !modeChanged && sentVoiceId) {
+            suppressVoiceOverride = true;
+            console.warn(
+              `[voice] session ${npcId} died ${lifetimeMs}ms after connect with no audio. ` +
+                `Treating as a Voice-override rejection — falling back to dashboard default voice ` +
+                `for the rest of this page session. To use per-character voices, toggle "Voice" ON ` +
+                `in the agent's Security tab → Overrides and republish.`,
+            );
+            useGame.getState().setVoiceLastError(
+              'Voice override rejected — enable Voice in agent Security tab',
+            );
+          }
+        }
+        // The SDK ended this session (either we called end(), or the server
+        // dropped us). Clear our active reference so the proximity loop
+        // doesn't keep treating the dead socket as live. The next tick will
+        // start a fresh session — and on a fallback path it'll skip the
+        // voice override that killed this one.
+        if (active === session) {
+          active = null;
+          useGame.getState().setActiveVoiceSession(null);
         }
       }
     },
