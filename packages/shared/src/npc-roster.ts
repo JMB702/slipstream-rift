@@ -122,7 +122,11 @@ export const NPCS: readonly NpcDef[] = [
     id: 'vex',
     name: 'Vex',
     agentId: 'TODO_AGENT_ID_vex',
-    characterId: 'medea',
+    // Was 'medea' — that Mixamo character has a different bind pose than
+    // Soldier and renders distorted under the shared rifle animation set.
+    // Falling back to 'eve' (visual collision with Mira at botCount≥5)
+    // until either Medea is re-rigged or replaced with another female.
+    characterId: 'eve',
     personality: [
       "Vex is in her early twenties, all attitude, all the time. She came up street-fighting in tournaments and won enough money to never have to work — and then she got bored, so she's here, looking for the next thing that'll feel like something. She's a natural shit-talker but it almost never cuts deep; the trash talk is the affection.",
       "Speech: fast, dry, lots of nicknames for the player (you'll get a new one every conversation — chief, cowboy, scout, sunshine, captain, ace, whatever). Half her sentences end in a question that's actually a dare. Laughs at her own jokes.",
