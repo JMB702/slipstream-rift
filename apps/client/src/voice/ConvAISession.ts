@@ -42,12 +42,14 @@ export class ConvAISession {
       ? ({ signedUrl: opts.signedUrl } as const)
       : ({ agentId: opts.agentId! } as const);
     try {
+      const pool = this.npc.greetings;
+      const greeting = pool[Math.floor(Math.random() * pool.length)] ?? '';
       this.conversation = await Conversation.startSession({
         ...authConfig,
         overrides: {
           agent: {
             prompt: { prompt: opts.memoryBlob },
-            firstMessage: this.npc.greeting,
+            firstMessage: greeting,
           },
           ...(opts.voiceId ? { tts: { voiceId: opts.voiceId } } : {}),
         },

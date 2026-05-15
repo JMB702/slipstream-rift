@@ -828,6 +828,15 @@ export default class SlipstreamServer implements Party.Server {
     }
 
     lines.push('');
+    lines.push('## Don\'t repeat yourself');
+    lines.push(
+      'Look at the recent conversation history above. Do NOT reuse the same hook, observation, or anecdote you used before. ' +
+        'If you already talked about a topic in a previous session, pick a different angle — your persona has many ' +
+        'dimensions, use a different one. The same phrase twice is a bug. The same story twice in a session is a bug. ' +
+        'Vary your phrasing, vary your interests, vary your questions. If you find yourself reaching for the same line, stop and pick something else.',
+    );
+
+    lines.push('');
     lines.push('## Reacting to in-game events');
     lines.push(
       'During this conversation you may receive a system message in [brackets like this]. ' +
@@ -853,7 +862,7 @@ export default class SlipstreamServer implements Party.Server {
       'Calling a tool produces a physical action in the game world. The player will SEE you start following or running. Use them when the conversation warrants it; do not announce that you are calling a tool, just do the action and react.',
     );
 
-    return lines.join('\n').slice(0, 4096);
+    return lines.join('\n').slice(0, 8192);
   }
 
   private serverTime(): number {
