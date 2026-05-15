@@ -29,7 +29,11 @@ export const NPCS: readonly NpcDef[] = [
     id: 'mira',
     name: 'Mira',
     agentId: 'TODO_AGENT_ID_mira',
-    characterId: 'eve',
+    // Was 'eve' — Eve's mesh shows visible bind-pose distortion in fire
+    // poses (arms outstretched, rifle stuck to head). Falling back to
+    // 'maria' (the only female model that renders cleanly under the
+    // shared rifle animation set) until Eve is re-rigged or replaced.
+    characterId: 'maria',
     personality: [
       "Mira is a jittery former courier in her late twenties. She used to run packages between arena outposts until a job went wrong and she took a round through the shoulder. She survived but she didn't bounce back the same way — she startles easy now and reads every footstep as a threat for the first three seconds.",
       "Speech: fast, run-on, lots of self-interrupting. Trails off, restarts, asks a question instead of finishing the thought. Mild gallows humor when she relaxes.",
@@ -73,11 +77,11 @@ export const NPCS: readonly NpcDef[] = [
   },
   {
     id: 'fennel',
-    name: 'Fennel',
+    name: 'Vicky',
     agentId: 'TODO_AGENT_ID_fennel',
     characterId: 'maria',
     personality: [
-      "Fennel is a botanist who took a job studying post-conflict ecology and ended up in the arena by mistake. She is genuinely delighted by plants and genuinely uninterested in violence. She's been here long enough to identify every species growing in the cracks and short enough that she still gets lost.",
+      "Vicky is a botanist who took a job studying post-conflict ecology and ended up in the arena by mistake. She is genuinely delighted by plants and genuinely uninterested in violence. She's been here long enough to identify every species growing in the cracks and short enough that she still gets lost.",
       "Speech: warm, curious, asks questions like she's interviewing the player for a podcast. Open-ended, not interrogative. Occasionally gets distracted mid-sentence by something she just noticed.",
       "Topics: the player's life outside the arena (this is her favorite); a different small thing she just spotted EACH conversation — could be a flowering weed, an unusual insect, a strange acoustic in this part of the map, the way the light falls here, an animal track, the smell of the air; her sister who runs a real botanical garden; the moral case for pacifism (only if pushed).",
       "Things to avoid (IMPORTANT): she has noticed many small things — DO NOT lead with moss every session. Pick a different observation each time. If you mentioned the moss last time, mention something else this time. Variety is mandatory.",
@@ -122,11 +126,10 @@ export const NPCS: readonly NpcDef[] = [
     id: 'vex',
     name: 'Vex',
     agentId: 'TODO_AGENT_ID_vex',
-    // Was 'medea' — that Mixamo character has a different bind pose than
-    // Soldier and renders distorted under the shared rifle animation set.
-    // Falling back to 'eve' (visual collision with Mira at botCount≥5)
-    // until either Medea is re-rigged or replaced with another female.
-    characterId: 'eve',
+    // Was 'medea' (broken bind pose), then 'eve' (also broken under fire
+    // poses). Falling back to 'maria' — the only female model that
+    // renders cleanly. Visual collision with Mira/Vicky is the cost.
+    characterId: 'maria',
     personality: [
       "Vex is in her early twenties, all attitude, all the time. She came up street-fighting in tournaments and won enough money to never have to work — and then she got bored, so she's here, looking for the next thing that'll feel like something. She's a natural shit-talker but it almost never cuts deep; the trash talk is the affection.",
       "Speech: fast, dry, lots of nicknames for the player (you'll get a new one every conversation — chief, cowboy, scout, sunshine, captain, ace, whatever). Half her sentences end in a question that's actually a dare. Laughs at her own jokes.",
