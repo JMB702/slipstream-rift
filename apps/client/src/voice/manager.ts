@@ -1,7 +1,6 @@
 import {
   NPC_VOICE,
   npcById,
-  voiceForCharacter,
   type ClientMessage,
   type ServerMessage,
   type Vec3,
@@ -61,7 +60,7 @@ export const installVoiceManager = (d: VoiceManagerDeps): void => {
 
 export const teardownVoiceManager = (): void => {
   deps = null;
-  void endActive();
+  void endActive('teardown');
   if (volumeTimer !== null) {
     clearInterval(volumeTimer);
     volumeTimer = null;
@@ -113,12 +112,6 @@ export const handleConsentRequired = (): void => {
 
 let lastReportedClosestId: string | null = null;
 let lastReportedDist = -1;
-// Auto-fallback flag: once we observe an instant disconnect with a voiceId
-// override (connecting → connected → ended within ~1.5s, no mode transition),
-// we assume the agent's "Voice" override toggle is disabled in the dashboard
-// and stop sending voiceId until the page is reloaded. Without this we'd
-// silently kill every session against a misconfigured agent.
-let suppressVoiceOverride = false;
 
 export const tickVoiceProximity = (selfPos: Vec3): void => {
   if (!deps) return;
@@ -148,12 +141,12 @@ export const tickVoiceProximity = (selfPos: Vec3): void => {
     const activeDist = distanceToNpc(selfPos, active.npc.id);
     if (activeDist === null) {
       console.log(`[voice] active npc ${active.npc.id} no longer in snapshot, ending session`);
-      void endActive();
+      void endActive('npc_disappeared');
     } else if (activeDist > NPC_VOICE.radius + NPC_VOICE.hysteresis) {
       console.log(
         `[voice] active npc ${active.npc.id} drifted to ${activeDist.toFixed(2)}m (>${NPC_VOICE.radius + NPC_VOICE.hysteresis}m), ending session`,
       );
-      void endActive();
+      void endActive('proximity');
     }
     return;
   }
@@ -224,22 +217,8 @@ const startSession = async (npcId: string): Promise<void> => {
     starting = false;
     return;
   }
-  // Voice follows the bot's current character MODEL. Roster.voiceId, if set,
-  // overrides the per-character map. If we've previously hit an instant
-  // override-rejection this page-session, fall back to the dashboard default.
-  const lastSnap = useGame.getState().snapshots.slice(-1)[0];
-  const liveBot = lastSnap
-    ? Array.from(lastSnap.players.values()).find((p) => p.isBot && p.npcId === npcId)
-    : undefined;
-  const characterVoice = liveBot ? voiceForCharacter(liveBot.characterId) : undefined;
-  const resolvedVoice = suppressVoiceOverride ? undefined : npc.voiceId ?? characterVoice;
-  const sentVoiceId = resolvedVoice !== undefined;
-
-  // Track this session's lifecycle so we can detect an "instant disconnect
-  // after connected with no audio activity" — the symptom of an unauthorized
-  // override (currently usually: the Voice toggle in the dashboard is off).
-  let connectedAt = 0;
-  let modeChanged = false;
+  // Voice and persona both live on the per-NPC agent now. No per-session
+  // overrides for either — the agent ID alone selects the right config.
   const session = new ConvAISession(npc, deps.myName, sessionId, {
     onTranscript: (line) => {
       deps?.send({ type: 'transcript', npcId, sessionId, line });
@@ -249,32 +228,30 @@ const startSession = async (npcId: string): Promise<void> => {
       console.log(`[voice] session ${npcId} status -> ${status}`);
       useGame.getState().setVoiceSessionStatus(status);
       if (status === 'connected') {
-        connectedAt = Date.now();
         useGame.getState().setVoiceLastError(null);
       } else if (status === 'error') {
         useGame.getState().setVoiceLastError('SDK reported error — see console');
-      } else if (status === 'ended') {
-        if (connectedAt > 0) {
-          const lifetimeMs = Date.now() - connectedAt;
-          if (lifetimeMs < 1500 && !modeChanged && sentVoiceId) {
-            suppressVoiceOverride = true;
-            console.warn(
-              `[voice] session ${npcId} died ${lifetimeMs}ms after connect with no audio. ` +
-                `Treating as a Voice-override rejection — falling back to dashboard default voice ` +
-                `for the rest of this page session. To use per-character voices, toggle "Voice" ON ` +
-                `in the agent's Security tab → Overrides and republish.`,
-            );
-            useGame.getState().setVoiceLastError(
-              'Voice override rejected — enable Voice in agent Security tab',
-            );
+        // Telemetry for B1: if the SDK errored while we still consider this
+        // session active, the proximity loop didn't ask for the end — tell
+        // the server why it's going away.
+        if (active === session) {
+          try {
+            deps?.send({ type: 'voice_session_end', sessionId: session.sessionId, reason: 'sdk_error' });
+          } catch {
+            // socket may already be closed
           }
         }
-        // The SDK ended this session (either we called end(), or the server
-        // dropped us). Clear our active reference so the proximity loop
-        // doesn't keep treating the dead socket as live. The next tick will
-        // start a fresh session — and on a fallback path it'll skip the
-        // voice override that killed this one.
+      } else if (status === 'ended') {
+        // The SDK ended this session. If `active === session` here, the
+        // proximity loop did NOT ask for the end (endActive nulls `active`
+        // before awaiting end()) — so this was an SDK-driven drop, the B1
+        // signature. Tell the server so the feedback pipeline sees it.
         if (active === session) {
+          try {
+            deps?.send({ type: 'voice_session_end', sessionId: session.sessionId, reason: 'sdk_ended' });
+          } catch {
+            // socket may already be closed
+          }
           active = null;
           useGame.getState().setActiveVoiceSession(null);
         }
@@ -282,7 +259,6 @@ const startSession = async (npcId: string): Promise<void> => {
     },
     onModeChange: (mode) => {
       console.log(`[voice] session ${npcId} mode -> ${mode}`);
-      modeChanged = true;
       useGame.getState().setVoiceMode(mode);
     },
   });
@@ -292,7 +268,9 @@ const startSession = async (npcId: string): Promise<void> => {
     ...(ctxMsg.agentId ? { agentId: ctxMsg.agentId } : {}),
     ...(ctxMsg.signedUrl ? { signedUrl: ctxMsg.signedUrl } : {}),
     memoryBlob: ctxMsg.memoryBlob,
-    ...(resolvedVoice ? { voiceId: resolvedVoice } : {}),
+    ...(ctxMsg.elapsedSinceLastMs !== undefined
+      ? { elapsedSinceLastMs: ctxMsg.elapsedSinceLastMs }
+      : {}),
   });
   session.setMuted(isMuted());
   starting = false;
@@ -315,13 +293,13 @@ const requestContext = (
   });
 };
 
-const endActive = async (): Promise<void> => {
+const endActive = async (reason: string = 'manual'): Promise<void> => {
   if (!active) return;
   const s = active;
   active = null;
   useGame.getState().setActiveVoiceSession(null);
   try {
-    deps?.send({ type: 'voice_session_end', sessionId: s.sessionId });
+    deps?.send({ type: 'voice_session_end', sessionId: s.sessionId, reason });
   } catch {
     // socket may already be closed
   }

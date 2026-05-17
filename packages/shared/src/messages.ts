@@ -1,4 +1,4 @@
-import type { GameEvent, GameSnapshot, PlayerId } from './state.js';
+import type { GameEvent, GameSnapshot, PlayerId, Pose, PoseTransition } from './state.js';
 import type { Vec3 } from './state.js';
 
 export interface InputFrame {
@@ -10,6 +10,9 @@ export interface InputFrame {
   sprint: boolean;
   fire: boolean;
   reload: boolean;
+  // Rising-edge "use the thing in front of me" press. Server checks proximity
+  // to interactable props (currently just the coffee maker on fps_shooter).
+  interact: boolean;
   yaw: number;
   pitch: number;
   // Camera-resolved aim. Sent on every frame, but it's the per-fire-input
@@ -38,8 +41,23 @@ export type ClientMessage =
   | { type: 'ping'; t: number }
   | { type: 'consent'; agreed: boolean; version: string }
   | { type: 'voice_session_start'; npcId: string; sessionId: string }
-  | { type: 'voice_session_end'; sessionId: string }
-  | { type: 'transcript'; npcId: string; sessionId: string; line: TranscriptLine };
+  // reason is diagnostic-only: 'proximity' (player walked away), 'sdk_ended'
+  // (SDK closed the session without us asking — the B1 case we're hunting),
+  // 'sdk_error' (SDK reported an error), 'manual' (explicit hangup). Omitted
+  // = 'manual'. The server forwards this verbatim into the feedback pipeline.
+  | { type: 'voice_session_end'; sessionId: string; reason?: string }
+  | { type: 'transcript'; npcId: string; sessionId: string; line: TranscriptLine }
+  // Set the local player's expressive pose. Sent by the local client (debug
+  // keys, future UI) for the controlled player. Voice agents drive NPC poses
+  // server-side via the /tools/set_pose webhook, not via this channel.
+  // `transition` plays a one-shot first; the server flips it to null after the
+  // matching POSE.*Ms duration and sets `pose` to the destination at that point.
+  | {
+      type: 'set_pose';
+      pose: Pose;
+      transition?: PoseTransition;
+      danceVariant?: number;
+    };
 
 export type ServerMessage =
   | { type: 'welcome'; you: PlayerId; serverTime: number }
@@ -58,6 +76,10 @@ export type ServerMessage =
       signedUrl?: string;
       memoryBlob: string;
       friendship: number;
+      // ms since the most recent voice session between this NPC and this
+      // player ended. Undefined = never spoken before. Drives the client's
+      // greeting-recency bucket (B2 sense-of-time).
+      elapsedSinceLastMs?: number;
     }
   // Mid-conversation system message piped into the agent via
   // sendContextualUpdate. Used to feed in-game events to the active session

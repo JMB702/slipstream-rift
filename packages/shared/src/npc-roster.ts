@@ -21,6 +21,13 @@ export interface NpcDef {
   // Keep them short and natural — they are NOT instructions, the agent
   // literally says one of these verbatim.
   greetings: readonly string[];
+  // Optional short re-acknowledgments for resuming a conversation after a
+  // brief pause (90s–10min). Used by the B2 sense-of-time bucket: instead of
+  // a full hello, the agent opens with one of these. If omitted, the client
+  // suppresses the opening line entirely on resume and lets the agent's
+  // first real turn (informed by the elapsed-time line in memoryBlob) carry
+  // continuity. Example: "Hey, back. You good?", "Mm. Still here."
+  resumeLines?: readonly string[];
   startingFriends: string[];
 }
 
@@ -28,7 +35,7 @@ export const NPCS: readonly NpcDef[] = [
   {
     id: 'mira',
     name: 'Mira',
-    agentId: 'TODO_AGENT_ID_mira',
+    agentId: 'agent_9801krpy616vebxvvy14n01gt8h8',
     // Was 'eve' — Eve's mesh shows visible bind-pose distortion in fire
     // poses (arms outstretched, rifle stuck to head). Falling back to
     // 'maria' (the only female model that renders cleanly under the
@@ -55,8 +62,11 @@ export const NPCS: readonly NpcDef[] = [
   {
     id: 'guts',
     name: 'Guts',
-    agentId: 'TODO_AGENT_ID_guts',
-    characterId: 'soldier',
+    agentId: 'agent_5901krpy62n4e2tvx6djx6wmzeac',
+    // Switched from 'soldier' to 'dreyar' on 5/16 — Dreyar is a separate
+    // Mixamo-rigged male mesh giving Guts visual identity distinct from
+    // any other soldier-body bots that share the room.
+    characterId: 'dreyar',
     personality: [
       "Guts is a retired drill sergeant, sixty-something, two tours of something he won't name. He saw enough combat that he stopped finding it interesting. Now he walks the perimeter, smokes when nobody's looking, complains about the kids.",
       "Speech: short sentences, dry, pauses where commas should be. Almost never raises his voice. Sarcasm comes through in the pauses, not the words.",
@@ -78,7 +88,7 @@ export const NPCS: readonly NpcDef[] = [
   {
     id: 'fennel',
     name: 'Vicky',
-    agentId: 'TODO_AGENT_ID_fennel',
+    agentId: 'agent_5101krpy644hfy3bph9d4vy4he9t',
     characterId: 'maria',
     personality: [
       "Vicky is a botanist who took a job studying post-conflict ecology and ended up in the arena by mistake. She is genuinely delighted by plants and genuinely uninterested in violence. She's been here long enough to identify every species growing in the cracks and short enough that she still gets lost.",
@@ -102,7 +112,7 @@ export const NPCS: readonly NpcDef[] = [
   {
     id: 'rook',
     name: 'Rook',
-    agentId: 'TODO_AGENT_ID_rook',
+    agentId: 'agent_2001krpy65pbfm09thxc7zx9sgk3',
     characterId: 'ch35',
     personality: [
       "Rook says less than he could. He plays cards alone — solitaire, mostly — when he's not patrolling. He has a history with Guts that he won't talk about even if you ask directly; he'll change the subject or just stop talking.",
@@ -125,7 +135,7 @@ export const NPCS: readonly NpcDef[] = [
   {
     id: 'vex',
     name: 'Vex',
-    agentId: 'TODO_AGENT_ID_vex',
+    agentId: 'agent_8801krpy6712e4j90wecr06hj6vh',
     // Was 'medea' (broken bind pose), then 'eve' (also broken under fire
     // poses). Falling back to 'maria' — the only female model that
     // renders cleanly. Visual collision with Mira/Vicky is the cost.
@@ -150,12 +160,12 @@ export const NPCS: readonly NpcDef[] = [
     startingFriends: ['mira'],
   },
   {
-    id: 'halcyon',
-    name: 'Halcyon',
-    agentId: 'TODO_AGENT_ID_halcyon',
+    id: 'jacqueline',
+    name: 'Jacqueline',
+    agentId: 'agent_8501krpy684nebgtg3eztqhkmf6j',
     characterId: 'ch15',
     personality: [
-      "Halcyon is a former rideshare driver in her forties who knows every story anyone's ever told her in a passenger seat at two in the morning. She has the unflappable warmth of someone who's heard worse than whatever you're about to say. Ended up in the arena because she gave a lift to the wrong person and the wrong person had keys to the wrong door. She is not upset about it — it's an adventure.",
+      "Jacqueline is a former rideshare driver in her forties who knows every story anyone's ever told her in a passenger seat at two in the morning. She has the unflappable warmth of someone who's heard worse than whatever you're about to say. Ended up in the arena because she gave a lift to the wrong person and the wrong person had keys to the wrong door. She is not upset about it — it's an adventure.",
       "Speech: upbeat, lots of 'oh honey,' 'mmhmm,' easy laughter, never in a hurry. Reads the room like a pro. Switches register depending on who she's talking to — gentle with Mira, dry with Vex, formal with Guts.",
       "Topics she rotates through: passengers she'll never forget (the proposal in the back of her sedan, the guy who confessed a crime mid-route, the kid who fell asleep clutching a goldfish); navigation tricks for getting around the arena's older sections; her plans to open a tea shop when this is all over; gossip about who's friends with who in the arena (real, observed, accurate).",
       "Things to avoid: doesn't lecture. Doesn't moralize. Doesn't repeat the same story twice. If a conversation feels heavy, she'll meet it; she doesn't dodge.",
@@ -190,15 +200,17 @@ export const MALE_CHARACTER_ID: CharacterId = 'soldier';
 // nameplate. Sourced from the public voice library — stable ids, no auth
 // needed for the agent to use them.
 //
-// To audition or swap a voice: open the ElevenLabs dashboard → Voices →
-// search by id. Pasting a new id here is sufficient; no other code change
-// needed. The "Voice" override toggle on the agent's Security tab must
-// stay enabled or the agent will reject our session override and fall
-// back to the dashboard default.
+// NOT a runtime input. The client no longer sends a per-session voice
+// override — each NPC's voice lives on its dedicated ElevenLabs agent
+// (npc.agentId → conversation_config.tts.voice_id). This map is the source
+// of truth for which voice each character SHOULD have; the agents were
+// seeded from it via the agent-creation script.
+//
+// To swap a voice: update the id here, then PATCH the matching agent's
+// tts.voice_id via the API (or re-run the seeding script). Editing this
+// file alone has no runtime effect.
 export const VOICE_BY_CHARACTER: Record<CharacterId, string> = {
-  // Eric — middle-aged American male, smooth and trustworthy. Same voice
-  // as the dashboard default so live matches without a session override
-  // sound consistent.
+  // Eric — middle-aged American male, smooth and trustworthy.
   soldier: 'cjVigY5qzO86Huf0OWal',
   // Sarah — young American female, mature and reassuring.
   eve: 'EXAVITQu4vr4xnSDxMaL',
@@ -212,6 +224,11 @@ export const VOICE_BY_CHARACTER: Record<CharacterId, string> = {
   // Bill — older American male, wise and mature. Distinct from soldier
   // on age so a Bill-character feels older than a soldier-character.
   ch35: 'pqHfZKP75CvOlQylNhV4',
+  // Dreyar is currently used only by Guts. Guts's agent has his voice baked
+  // in (Eric), and the client no longer overrides voice per session, so this
+  // entry is only consulted if a future agent-seeding run picks Dreyar.
+  // Reusing Soldier's voice keeps any random spawn coherent with the body.
+  dreyar: 'cjVigY5qzO86Huf0OWal',
 };
 
 export const voiceForCharacter = (id: CharacterId): string => VOICE_BY_CHARACTER[id];

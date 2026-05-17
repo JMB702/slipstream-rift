@@ -29,6 +29,7 @@ export const connect = (
   accessCode?: string,
   botCount?: number,
   botDifficulty?: BotDifficulty,
+  npcIds?: string[],
 ): NetClient => {
   const store = useGame.getState();
   store.setConn('connecting');
@@ -43,6 +44,9 @@ export const connect = (
   }
   if (botDifficulty) {
     query.botDifficulty = botDifficulty;
+  }
+  if (npcIds && npcIds.length > 0) {
+    query.npcIds = npcIds.join(',');
   }
   if (accessCode) {
     query.accessCode = accessCode;

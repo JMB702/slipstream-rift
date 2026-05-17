@@ -39,10 +39,12 @@ export const useMuted = (): boolean => useSyncExternalStore(subscribe, getSnapsh
 let gamepadPollHandle: number | null = null;
 const prevButtons = new Map<number, boolean>();
 
-// Xbox button indices we listen for:
-//   3  = Y
-//   9  = Menu (Start) / fallback
-const GAMEPAD_TOGGLE_BUTTONS = [3, 9];
+// Xbox button indices we listen for. Y (button 3) was previously also
+// mapped to mute, but B is the combat/casual toggle and Y was free territory
+// once we standardized — keep Menu/Start only as the gamepad mute path so
+// nothing on the right-cluster face buttons silently changes the mic state.
+//   9  = Menu (Start)
+const GAMEPAD_TOGGLE_BUTTONS = [9];
 
 const pollGamepads = (): void => {
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];

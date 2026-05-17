@@ -1,7 +1,7 @@
 import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { Suspense, useState } from 'react';
-import { PLAYER, type CharacterId, type PlayerId, type Vec3 } from '@slipstream-npc/shared';
+import { PLAYER, type CharacterId, type PlayerId, type Pose, type PoseTransition, type Vec3 } from '@slipstream-npc/shared';
 import { Character } from './Character.js';
 import { getLastAimedAt } from './aim-state.js';
 import { useGame } from '../store.js';
@@ -23,6 +23,9 @@ interface Props {
   isFriend?: boolean;
   voiceIcon?: 'mic' | 'speaker' | null;
   characterId?: CharacterId;
+  pose?: Pose;
+  poseTransition?: PoseTransition;
+  danceVariant?: number;
 }
 
 // Persistent "AI" badge that floats above every bot/NPC. Required by
@@ -61,6 +64,9 @@ export const PlayerModel = ({
   isFriend,
   voiceIcon,
   characterId,
+  pose,
+  poseTransition,
+  danceVariant,
 }: Props) => {
   const myId = useGame((s) => s.myId);
   const isSelf = playerId !== null && playerId === myId;
@@ -76,6 +82,9 @@ export const PlayerModel = ({
           alive={alive}
           playerId={playerId}
           characterId={characterId}
+          pose={pose}
+          poseTransition={poseTransition}
+          danceVariant={danceVariant}
         />
       </Suspense>
       {alive && (

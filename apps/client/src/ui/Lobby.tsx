@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DEFAULT_MAP_ID,
   MAPS,
   MATCH,
+  NPCS,
   isBotDifficulty,
   isMapId,
   type BotDifficulty,
@@ -19,6 +20,7 @@ interface Props {
     accessCode: string;
     botCount: number;
     botDifficulty: BotDifficulty;
+    npcIds: string[];
   }): void;
 }
 
@@ -30,12 +32,42 @@ export const Lobby = ({ onJoin }: Props) => {
   const [killTarget, setKillTarget] = useState<string>(String(MATCH.defaultKillTarget));
   const [botCount, setBotCount] = useState<string>(String(MATCH.defaultBotCount));
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>(MATCH.defaultBotDifficulty);
+  const [npcIds, setNpcIds] = useState<string[]>(() => loadNpcIds());
   const [accessCode, setAccessCode] = useState(() => loadCode());
   const [localError, setLocalError] = useState<string | null>(null);
   const closeReason = useGame((s) => s.lastCloseReason);
   const conn = useGame((s) => s.conn);
   const error = localError ?? closeReason;
   const codeOk = accessCode.length === ACCESS_CODE_LEN;
+
+  const parsedBotCount = useMemo(() => {
+    const parsed = Math.floor(Number(botCount));
+    return Number.isFinite(parsed)
+      ? Math.max(MATCH.minBotCount, Math.min(MATCH.maxBotCount, parsed))
+      : MATCH.defaultBotCount;
+  }, [botCount]);
+
+  // Walk slot-by-slot, honoring the user's current pick when it's a real NPC
+  // and not yet taken by an earlier slot; otherwise fall back to the first
+  // NPC still available. Guarantees no duplicates regardless of stale
+  // localStorage state.
+  const slotIds = useMemo(() => {
+    const used = new Set<string>();
+    const out: string[] = [];
+    for (let i = 0; i < parsedBotCount; i++) {
+      const pick = npcIds[i];
+      if (pick && NPCS.some((n) => n.id === pick) && !used.has(pick)) {
+        out.push(pick);
+        used.add(pick);
+        continue;
+      }
+      const fallback = NPCS.find((n) => !used.has(n.id));
+      if (!fallback) break;
+      out.push(fallback.id);
+      used.add(fallback.id);
+    }
+    return out;
+  }, [npcIds, parsedBotCount]);
 
   return (
     <div style={overlay}>
@@ -103,6 +135,41 @@ export const Lobby = ({ onJoin }: Props) => {
           </span>
         </label>
 
+        {slotIds.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 13, opacity: 0.85 }}>NPC roster</div>
+            {slotIds.map((id, i) => (
+              <select
+                key={i}
+                style={{ ...input, marginTop: 6 }}
+                value={id}
+                onChange={(e) => {
+                  const chosen = e.target.value;
+                  if (!NPCS.some((n) => n.id === chosen)) return;
+                  const next = [...slotIds];
+                  next[i] = chosen;
+                  setNpcIds(next);
+                }}
+              >
+                {NPCS.map((n) => {
+                  const takenElsewhere = slotIds.some(
+                    (sid, j) => j !== i && sid === n.id,
+                  );
+                  return (
+                    <option key={n.id} value={n.id} disabled={takenElsewhere}>
+                      {n.name}
+                      {takenElsewhere ? ' (in use)' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            ))}
+            <span style={hint}>
+              Pick exactly which NPCs spawn. Locked by the first player.
+            </span>
+          </div>
+        )}
+
         <label style={label}>
           Bot difficulty
           <select
@@ -162,6 +229,8 @@ export const Lobby = ({ onJoin }: Props) => {
             const finalBots = Number.isFinite(parsedBots)
               ? Math.max(MATCH.minBotCount, Math.min(MATCH.maxBotCount, parsedBots))
               : MATCH.defaultBotCount;
+            const finalNpcIds = slotIds.slice(0, finalBots);
+            saveNpcIds(finalNpcIds);
             useGame.getState().setCloseReason(null);
             setLocalError(null);
             onJoin({
@@ -171,6 +240,7 @@ export const Lobby = ({ onJoin }: Props) => {
               accessCode,
               botCount: finalBots,
               botDifficulty,
+              npcIds: finalNpcIds,
             });
           }}
         >
@@ -178,7 +248,7 @@ export const Lobby = ({ onJoin }: Props) => {
         </button>
 
         <p style={{ opacity: 0.5, fontSize: 12, marginTop: 16 }}>
-          WASD move · Shift sprint · Space jump · Mouse aim · Click fire · R reload
+          WASD move · Shift sprint · Space jump · Mouse aim · Click fire · R reload · E interact
         </p>
 
         <CopyClonePromptButton />
@@ -361,6 +431,35 @@ const loadMap = (): MapId => {
 const saveMap = (id: MapId) => {
   try {
     localStorage.setItem(MAP_KEY, id);
+  } catch {
+    // ignore
+  }
+};
+
+const NPC_IDS_KEY = 'slipstream-npc:npcIds';
+const loadNpcIds = (): string[] => {
+  try {
+    const raw = localStorage.getItem(NPC_IDS_KEY);
+    if (!raw) return NPCS.slice(0, MATCH.defaultBotCount).map((n) => n.id);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return NPCS.slice(0, MATCH.defaultBotCount).map((n) => n.id);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const v of parsed) {
+      if (typeof v !== 'string') continue;
+      if (seen.has(v)) continue;
+      if (!NPCS.some((n) => n.id === v)) continue;
+      out.push(v);
+      seen.add(v);
+    }
+    return out.length > 0 ? out : NPCS.slice(0, MATCH.defaultBotCount).map((n) => n.id);
+  } catch {
+    return NPCS.slice(0, MATCH.defaultBotCount).map((n) => n.id);
+  }
+};
+const saveNpcIds = (ids: string[]) => {
+  try {
+    localStorage.setItem(NPC_IDS_KEY, JSON.stringify(ids));
   } catch {
     // ignore
   }

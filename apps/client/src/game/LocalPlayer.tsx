@@ -12,7 +12,7 @@ import {
 } from '@slipstream-npc/shared';
 import { useGame } from '../store.js';
 import { createInput } from './input.js';
-import { setActiveInput, setPredictedState, consumeFire } from './local-state.js';
+import { setActiveInput, setPredictedState, consumeFire, consumeInteractHold, getDrinkLockedYaw } from './local-state.js';
 import { castCameraRay, findAimTarget, stampAimedAt } from './aim-state.js';
 import { hapticFire } from './haptics.js';
 import { playDryFire } from './sfx.js';
@@ -48,6 +48,98 @@ export const LocalPlayer = ({ send, myName }: Props) => {
     };
   }, [gl]);
 
+  // Pose controls.
+  //   Y  — toggle between combat (rifle aim) and casual (relaxed). Players
+  //        spawn in casual; taking damage auto-engages combat via server-side
+  //        clearPose. Firing the trigger in casual does NOTHING — the player
+  //        must explicitly Y to draw the gun first, so the trigger can't
+  //        accidentally yank a chatting NPC into combat. Y lets them holster
+  //        again afterwards without having to wait or get hit.
+  //   1-7 — explicit pose tests for the social animations (lean / sit / lay
+  //        / dance variants). Send target pose only; the server applies the
+  //        right transition (e.g. sit→stand_up→casual when leaving sit).
+  //
+  // Ignored while a text input is focused so name entry can't accidentally
+  // seat the player.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      switch (e.code) {
+        case 'KeyY': {
+          // Read combat-vs-not directly. Nullish coalescing on .pose collapses
+          // `null` (combat) into the same bucket as missing-snapshot, which
+          // would lock the player in combat forever (the toggle always
+          // re-sends pose: null). Compare the snapshot field explicitly.
+          const me = useGame.getState().snapshots.at(-1)?.players.get(useGame.getState().myId ?? '');
+          const inCombat = me?.pose === null;
+          send({ type: 'set_pose', pose: inCombat ? 'casual_idle' : null });
+          break;
+        }
+        case 'Digit1':
+          send({ type: 'set_pose', pose: 'casual_idle' });
+          break;
+        case 'Digit2':
+          send({ type: 'set_pose', pose: null });
+          break;
+        case 'Digit3':
+          send({ type: 'set_pose', pose: 'lean_wall' });
+          break;
+        case 'Digit4':
+          send({ type: 'set_pose', pose: 'sit' });
+          break;
+        case 'Digit5':
+          send({ type: 'set_pose', pose: 'lay' });
+          break;
+        case 'Digit6':
+          send({ type: 'set_pose', pose: 'dance', danceVariant: 0 });
+          break;
+        case 'Digit7':
+          send({ type: 'set_pose', pose: 'dance', danceVariant: 1 });
+          break;
+        case 'Digit8':
+          send({ type: 'set_pose', pose: 'dance', danceVariant: 2 });
+          break;
+        default:
+          return;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [send]);
+
+  // Xbox controller: B (button 1) toggles combat/casual. Easy thumb reach
+  // without breaking aim (vs RB which forces a hand reposition), and clear of
+  // the taken bindings (A=jump, X=reload, Y=mute, LT/RT=aim/fire, LSB=sprint).
+  useEffect(() => {
+    let raf = 0;
+    let prevPressed = false;
+    const poll = () => {
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      let pressed = false;
+      for (const pad of pads) {
+        if (!pad) continue;
+        if (pad.buttons[1]?.pressed) {
+          pressed = true;
+          break;
+        }
+      }
+      if (pressed && !prevPressed) {
+        // See the KeyY handler for the bug this avoids — `null ?? 'casual_idle'`
+        // collapses combat-mode and missing-snapshot into one bucket, locking
+        // the toggle.
+        const me = useGame.getState().snapshots.at(-1)?.players.get(useGame.getState().myId ?? '');
+        const inCombat = me?.pose === null;
+        send({ type: 'set_pose', pose: inCombat ? 'casual_idle' : null });
+      }
+      prevPressed = pressed;
+      raf = requestAnimationFrame(poll);
+    };
+    raf = requestAnimationFrame(poll);
+    return () => cancelAnimationFrame(raf);
+  }, [send]);
+
   useFrame((_, delta) => {
     const dtMs = delta * 1000;
     accumulator.current += dtMs;
@@ -59,16 +151,23 @@ export const LocalPlayer = ({ send, myName }: Props) => {
       lastSent.current = performance.now();
       accumulator.current = 0;
 
-      const fired = consumeFire();
+      const rawFired = consumeFire();
+      const interacted = consumeInteractHold();
+      // Casual mode: trigger is a no-op. Suppress the fire bit before it
+      // reaches the InputFrame so no haptic, no dry-fire SFX, no shot intent
+      // crosses the wire. Player must press Y to draw the gun first. Mirrors
+      // the server-side gate in apps/party/src/server.ts case 'input'.
+      const myIdForGate = useGame.getState().myId;
+      const lastSnapForGate = useGame.getState().snapshots[useGame.getState().snapshots.length - 1];
+      const meForGate = myIdForGate ? lastSnapForGate?.players.get(myIdForGate) : undefined;
+      const inCasual = meForGate?.pose === 'casual_idle';
+      const fired = rawFired && !inCasual;
       if (fired) {
         // Server is authoritative on ammo and life; don't buzz on dry-fire
         // pulls or trigger-mashing while dead.
-        const myId = useGame.getState().myId;
-        const snap = useGame.getState().snapshots[useGame.getState().snapshots.length - 1];
-        const meNow = myId ? snap?.players.get(myId) : undefined;
-        if (meNow && meNow.alive && meNow.ammo > 0) {
+        if (meForGate && meForGate.alive && meForGate.ammo > 0) {
           hapticFire();
-        } else if (meNow && meNow.alive && meNow.ammo <= 0) {
+        } else if (meForGate && meForGate.alive && meForGate.ammo <= 0) {
           playDryFire();
         }
       }
@@ -105,6 +204,7 @@ export const LocalPlayer = ({ send, myName }: Props) => {
         sprint: live.sprint && !fired,
         fire: fired,
         reload: live.reload,
+        interact: interacted,
         yaw: live.yaw,
         pitch: live.pitch,
         aimOrigin,
@@ -175,6 +275,7 @@ export const LocalPlayer = ({ send, myName }: Props) => {
       yaw: me.yaw,
       pitch: me.pitch,
       grounded: me.position[1] <= PLAYER.height / 2 + 0.001,
+      coffeeBuffUntil: me.coffeeBuffUntil,
     };
     for (const frame of inputBuffer.current) {
       state = applyMovement(state, frame);
@@ -193,6 +294,7 @@ export const LocalPlayer = ({ send, myName }: Props) => {
         sprint: live.sprint,
         fire: false,
         reload: false,
+        interact: false,
         yaw: live.yaw,
         pitch: live.pitch,
         // Local-only prediction frame; never serialized over the wire.
@@ -204,7 +306,13 @@ export const LocalPlayer = ({ send, myName }: Props) => {
     setPredictedState(state);
 
     ref.current.position.set(state.position[0], state.position[1], state.position[2]);
-    ref.current.rotation.y = state.yaw;
+    // During a coffee drink, the rendered character yaw is locked to wherever
+    // the player was facing at drink start. The camera (mouse-driven) still
+    // updates each frame, so the player can free-orbit around the stationary
+    // character. Live state.yaw is still sent on the wire — the character's
+    // gameplay direction is unaffected — only the local render is frozen.
+    const lockedYaw = getDrinkLockedYaw();
+    ref.current.rotation.y = lockedYaw !== null ? lockedYaw : state.yaw;
 
     tickVoiceProximity(state.position);
 
@@ -237,7 +345,11 @@ export const LocalPlayer = ({ send, myName }: Props) => {
         reloading={me?.reloading ?? false}
         vaulting={me?.vaulting ?? false}
         playerId={myId ?? null}
+        characterId={me?.characterId}
         voiceIcon={localVoiceIcon}
+        pose={me?.pose ?? null}
+        poseTransition={me?.poseTransition ?? null}
+        danceVariant={me?.danceVariant ?? 0}
       />
     </group>
   );

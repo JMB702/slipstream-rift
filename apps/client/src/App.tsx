@@ -30,6 +30,7 @@ export const App = () => {
     accessCode,
     botCount,
     botDifficulty,
+    npcIds,
   }: {
     name: string;
     mapId: MapId;
@@ -37,10 +38,11 @@ export const App = () => {
     accessCode: string;
     botCount: number;
     botDifficulty: BotDifficulty;
+    npcIds: string[];
   }) => {
     setActiveMap(mapId);
     useGame.getState().setActiveMapId(mapId);
-    const c = connect(mapId, name, killTarget, accessCode, botCount, botDifficulty);
+    const c = connect(mapId, name, killTarget, accessCode, botCount, botDifficulty, npcIds);
     installVoiceManager({ send: c.send, myName: name });
     setClient(c);
     setName(name);

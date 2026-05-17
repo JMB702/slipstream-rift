@@ -29,7 +29,14 @@ export class ConvAISession {
     agentId?: string;
     signedUrl?: string;
     memoryBlob: string;
-    voiceId?: string;
+    // ms since the player last spoke with this NPC. Drives the
+    // greeting-recency bucket (B2 sense-of-time):
+    //  <  90s  → suppress the opening line entirely; continue mid-thought.
+    //  90s-10m → use resumeLines if persona has them, else suppress.
+    //  10m-1d  → fresh greeting (normal pool).
+    //  > 1d    → fresh greeting (normal pool); memoryBlob tells the LLM the gap.
+    // Undefined = never spoken before → fresh greeting.
+    elapsedSinceLastMs?: number;
   }): Promise<void> {
     if (this.conversation || this.ended) return;
     this.cb.onStatusChange?.('connecting');
@@ -42,16 +49,38 @@ export class ConvAISession {
       ? ({ signedUrl: opts.signedUrl } as const)
       : ({ agentId: opts.agentId! } as const);
     try {
-      const pool = this.npc.greetings;
-      const greeting = pool[Math.floor(Math.random() * pool.length)] ?? '';
+      const elapsed = opts.elapsedSinceLastMs;
+      const greetingsPool = this.npc.greetings;
+      const resumePool = this.npc.resumeLines ?? [];
+      const pickRand = (pool: readonly string[]) =>
+        pool[Math.floor(Math.random() * pool.length)] ?? '';
+      let firstMessage: string;
+      if (elapsed === undefined || elapsed >= 10 * 60_000) {
+        // Never spoken before, or long enough that a fresh greeting fits.
+        firstMessage = pickRand(greetingsPool);
+      } else if (elapsed >= 90_000) {
+        // Short pause — prefer a resume line; fall back to silence so the
+        // agent picks up where it left off using the memoryBlob context.
+        firstMessage = resumePool.length > 0 ? pickRand(resumePool) : '';
+      } else {
+        // Essentially continuous — no opening line at all.
+        firstMessage = '';
+      }
+      console.log(
+        `[voice] ${this.npc.name} firstMessage choice: elapsed=${elapsed === undefined ? 'never' : Math.round(elapsed / 1000) + 's'} → ${firstMessage === '' ? '(suppressed)' : `"${firstMessage.slice(0, 40)}…"`}`,
+      );
+      // Persona and voice live on the agent itself (one ElevenLabs agent per
+      // NPC). Only first_message stays as an override so each session opens
+      // appropriately for the recency bucket. Dynamic per-session context
+      // (friendship, recent transcripts, live game state, elapsed time) is
+      // sent via sendContextualUpdate after connect so it layers on top of
+      // the baked persona instead of replacing it.
       this.conversation = await Conversation.startSession({
         ...authConfig,
         overrides: {
           agent: {
-            prompt: { prompt: opts.memoryBlob },
-            firstMessage: greeting,
+            firstMessage,
           },
-          ...(opts.voiceId ? { tts: { voiceId: opts.voiceId } } : {}),
         },
         dynamicVariables: {
           npc_id: this.npc.id,
@@ -86,6 +115,17 @@ export class ConvAISession {
           // browser-side handler.
         },
       });
+      // Now that the session is connected, push the dynamic memory blob in as
+      // a system message. The SDK queues it for the agent's next turn, so it
+      // arrives before the agent's first real response (after the player's
+      // first utterance — the greeting was already sent as first_message).
+      if (opts.memoryBlob.trim()) {
+        try {
+          this.conversation.sendContextualUpdate(opts.memoryBlob);
+        } catch (err) {
+          console.warn(`[voice] initial sendContextualUpdate failed:`, err);
+        }
+      }
     } catch (err) {
       console.warn(`[voice] startSession failed for ${this.npc.name}:`, err);
       this.cb.onStatusChange?.('error');

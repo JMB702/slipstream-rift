@@ -95,6 +95,9 @@ export const RemotePlayer = ({ id }: Props) => {
         isFriend={isFriend}
         voiceIcon={voiceIcon}
         characterId={player.characterId}
+        pose={player.pose}
+        poseTransition={player.poseTransition}
+        danceVariant={player.danceVariant}
       />
     </group>
   );

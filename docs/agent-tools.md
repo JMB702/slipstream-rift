@@ -20,9 +20,9 @@ After this, the next session start passes the right voiceId per character
 model and you'll hear distinct voices on Eve / Maria / Medea / Matilda /
 Soldier / Bill bodies.
 
-## 2. Registering the 4 webhook tools in ElevenLabs
+## 2. Registering the 5 webhook tools in ElevenLabs
 
-The Slipstream-NPC agent calls four webhooks during conversations:
+The Slipstream-NPC agent calls five webhooks during conversations:
 
 | Tool | Effect on the game |
 | --- | --- |
@@ -30,6 +30,7 @@ The Slipstream-NPC agent calls four webhooks during conversations:
 | `follow_player` | NPC starts following the player at ~3m. Hostility / engage still wins. |
 | `stop_following` | NPC stops following. |
 | `flee_from` | NPC moves away from the player for `SOCIAL.hostilityMs`. |
+| `drink_coffee` | NPC walks to the free coffee maker and drinks after arrival. |
 
 ## One-time dev setup
 
@@ -50,8 +51,8 @@ The `secret` value is `ELEVENLABS_AGENT_TOOL_SECRET` from `apps/party/.env`.
 2. Click **`</> Edit as JSON`** at the bottom-left of the dialog.
 3. Triple-click into the JSON box, **Cmd-A** to select all, **Delete**, then paste the JSON for the tool below.
 4. **Add tool**.
-5. Repeat for each of the 4 tools.
-6. After all 4 are added, click **Publish** at the top.
+5. Repeat for each of the 5 tools.
+6. After all 5 are added, click **Publish** at the top.
 
 ## Tool JSON
 
@@ -197,9 +198,44 @@ The `secret` value is `ELEVENLABS_AGENT_TOOL_SECRET` from `apps/party/.env`.
 }
 ```
 
+### drink_coffee
+
+```json
+{
+  "type": "webhook",
+  "name": "drink_coffee",
+  "description": "Walk over to the free coffee maker in the arena and have a cup. Call this when your persona naturally would — Guts grumbles about coffee prices and might do it sarcastically, Vex would do it for fun, Vicky might decline entirely. You decide. The game will path you to the maker. There is no cooldown right now. Only available on the fps_shooter map. Don't call reflexively; only when it fits the character. The tool starts the walk; do not claim you drank until the game sends a system message confirming you had a cup.",
+  "api_schema": {
+    "url": "<TUNNEL_URL>/parties/main/fps_shooter/tools/drink_coffee",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [
+      { "id": "npcId", "type": "string", "description": "NPC id", "value_type": "constant", "constant_value": "{{npc_id}}" },
+      { "id": "playerName", "type": "string", "description": "Player name", "value_type": "constant", "constant_value": "{{player_name}}" },
+      { "id": "sessionId", "type": "string", "description": "Voice session id", "value_type": "constant", "constant_value": "{{session_id}}" },
+      { "id": "secret", "type": "string", "description": "Shared secret", "value_type": "constant", "constant_value": "<SECRET>" }
+    ],
+    "request_body_schema": null,
+    "request_headers": [],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "response_timeout_secs": 10,
+  "dynamic_variables": { "dynamic_variable_placeholders": {} },
+  "assignments": [],
+  "disable_interruptions": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "tool_error_handling_mode": "auto",
+  "response_mocks": []
+}
+```
+
 ## Verifying
 
-After adding all four and publishing, check at the terminal:
+After adding all five and publishing, check at the terminal:
 
 ```sh
 curl -i -X POST "<TUNNEL_URL>/parties/main/fps_shooter/tools/make_friend?npcId=mira&playerName=YOUR_NAME&sessionId=test&secret=<SECRET>"
