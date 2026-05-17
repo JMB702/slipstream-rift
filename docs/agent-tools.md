@@ -51,7 +51,7 @@ Use that URL as `<TUNNEL_URL>` below. Each time you restart cloudflared the URL 
 | `flee_from` | NPC moves away from the player for `SOCIAL.hostilityMs`. |
 | `start_attacking` | NPC begins actively shooting at the named target (player name). |
 | `stop_attacking` | NPC stops attacking the named target; falls back to defensive behavior. |
-| `set_pose` | NPC strikes a pose (e.g. `sitting`, `kneeling`, `dancing`). Optional `danceVariant` integer. |
+| `set_pose` | NPC adopts an idle stance. Valid: `casual_idle` (weapon stowed, relaxed standing — use when player asks to holster), `lean_wall`, `sit`, `lay`, `dance` (optional `danceVariant` int), `clear` (back to default combat-ready). Any non-`clear` pose hides the rifle. |
 | `drink_coffee` | NPC walks to the coffee maker (fps_shooter map only) and drinks after arrival. |
 | `patrol` | NPC switches to patrol mode. |
 | `sprint_patrol` | Patrol mode at sprint speed. |
@@ -277,7 +277,7 @@ Use that URL as `<TUNNEL_URL>` below. Each time you restart cloudflared the URL 
 {
   "type": "webhook",
   "name": "set_pose",
-  "description": "Strike a physical pose. Valid poses include 'sitting', 'kneeling', 'dancing', 'standing', 'leaning'. Optional `danceVariant` integer picks a specific dance clip if pose is 'dancing'. Call when your persona naturally would (Vex might dance, Rook would not). The pose persists until you set another or the engagement state preempts it.",
+  "description": "Adopt an idle stance. Pose values: 'casual_idle' (stows your weapon and stands relaxed — call this when the player asks you to put your gun away or holster it), 'lean_wall' (leans against the nearest wall, weapon stowed), 'sit' (sits down, weapon stowed), 'lay' (lies down, weapon stowed), 'dance' (dances; pass danceVariant 0-3 to pick a clip), 'clear' (returns to default combat-ready stance with weapon out). Call when your persona naturally would (Vex might dance, Rook would not). The pose persists until you set another or until combat preempts it.",
   "api_schema": {
     "url": "<TUNNEL_URL>/parties/main/fps_shooter/tools/set_pose",
     "method": "POST",

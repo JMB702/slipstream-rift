@@ -32,6 +32,12 @@ export interface TranscriptLine {
   role: 'user' | 'agent';
   text: string;
   at: number;
+  // True when this line is an `agent_response_correction` event from
+  // ElevenLabs — a server-side rewrite of the last agent_response. The
+  // client store uses this flag to REPLACE the last agent turn rather
+  // than appending, so the transcript doesn't show "Mira repeated herself"
+  // when the SDK streams a partial first and a fuller correction second.
+  correction?: boolean;
 }
 
 export type ClientMessage =

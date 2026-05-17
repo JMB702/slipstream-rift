@@ -113,6 +113,26 @@ export class ConvAISession {
             at: Date.now(),
           });
         },
+        // Streaming responses can fire onMessage with a short partial first,
+        // then the server emits an `agent_response_correction` with the fuller
+        // text. Without subscribing, the partial lingers in the transcript as
+        // a separate agent turn — players see "you repeated yourself" because
+        // the corrected text reads as a near-duplicate. Tag the correction
+        // distinctly so the store can replace the last agent line instead of
+        // appending. Audio playback of the correction is SDK-internal; this
+        // only cleans up the visible transcript.
+        onAgentResponseCorrection: (event) => {
+          const corrected =
+            (event as { corrected_agent_response?: string } | undefined)
+              ?.corrected_agent_response ?? '';
+          if (!corrected) return;
+          this.cb.onTranscript?.({
+            role: 'agent',
+            text: corrected,
+            at: Date.now(),
+            correction: true,
+          });
+        },
         clientTools: {
           // Reserved for v2 client-tool calls. Today the make_friend tool
           // is a server webhook (Phase 6) so the agent doesn't need a

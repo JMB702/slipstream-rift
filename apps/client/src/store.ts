@@ -159,9 +159,23 @@ export const useGame = create<State>((set, get) => ({
   },
 
   pushTranscript(t) {
-    set((state) => ({
-      voiceTranscripts: [...state.voiceTranscripts, t].slice(-200),
-    }));
+    set((state) => {
+      const next = state.voiceTranscripts.slice();
+      // agent_response_correction events rewrite the last agent turn rather
+      // than adding a new one. The audio for the original was already played
+      // (SDK-internal); the correction is mostly a transcript-level cleanup.
+      if (t.line.correction && t.line.role === 'agent') {
+        for (let i = next.length - 1; i >= 0; i--) {
+          const cand = next[i]!;
+          if (cand.line.role !== 'agent') continue;
+          if (cand.sessionId !== t.sessionId || cand.npcId !== t.npcId) break;
+          next[i] = t;
+          return { voiceTranscripts: next.slice(-200) };
+        }
+      }
+      next.push(t);
+      return { voiceTranscripts: next.slice(-200) };
+    });
   },
 
   reset() {
