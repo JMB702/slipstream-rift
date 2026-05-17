@@ -151,12 +151,17 @@ function mutateAgent(agent, { rename, secret, host, oldPrefix, newPrefix }) {
       }
       return next;
     });
+    // GET returns both `tools` (full defs) and `tool_ids` (refs) on the
+    // prompt; PATCH rejects sending both (400 "both_tools_and_tool_ids_provided").
+    // Strip tool_ids so only the modified tools array goes back.
+    const promptCopy = { ...(agent.conversation_config?.agent?.prompt ?? {}) };
+    delete promptCopy.tool_ids;
     patch.conversation_config = {
       ...(agent.conversation_config ?? {}),
       agent: {
         ...(agent.conversation_config?.agent ?? {}),
         prompt: {
-          ...(agent.conversation_config?.agent?.prompt ?? {}),
+          ...promptCopy,
           tools: nextTools,
         },
       },

@@ -275,6 +275,10 @@ Volume constants live at the top of `sfx.ts`. Source SFX live in `Audio/SFX/` (n
 
 **Fork-specific in-flight work lives in [`docs/workbook.html`](docs/workbook.html).** Open the file in a browser for status pills + action items. Cards include B1 (voice session drops while stationary — instrumented, awaiting reproduction with ring buffer hot), B5/B9 (arena nav + sky-walking), F1 (Halsey — meta-fiction NPC creation, will use persona deltas), F2/F3 (sense-of-time follow-on, jump action). Pulling from there before doing other engine polish keeps the persona work cohesive.
 
+Queued fork-specific features (not yet in the workbook):
+
+- **NPC vision (player-triggered).** When a player asks an NPC to look at something ("what do you see," "look over there"), the NPC describes the scene in character. Architecture: ElevenLabs `look_around` tool + regex fallback → server requests an offscreen render from the talking player's client (camera at NPC's eye, yaw aligned with player's yaw so "look there" = "look where I'm looking") → client uploads ~30KB JPEG → server calls Claude Haiku vision → result returned as a `self_vision_result` self-state alert → agent's next turn voices it. Stall mechanic: tool response instructs the agent to say "hmm, let me see..." while the ~2s round-trip resolves. Bounded: one pending look per session, 8s timeout with fallback alert, only on explicit player request (no autonomous looking). Caveats noted in design: GL state restoration during the offscreen render, `LOCAL_HIDE_DIST` body-hide should be disabled for NPC POV captures, drei `<Html>` nameplates won't render into the target. Adds a new `GameChange` so personas know the capability exists. Promote to an `F#` workbook card when work starts.
+
 Engine-level (inherited from upstream Slipstream, all still real):
 
 - **Audit obstacle Y-bounds for `fps_shooter`** (see Known issues above). Highest-impact gameplay fix outstanding.
