@@ -1,62 +1,63 @@
-# Dashboard setup checklist
+# Agent dashboard setup — paste-ready tool JSON
 
-Two manual setup steps in the ElevenLabs dashboard at
-`https://elevenlabs.io/app/agents/agents/agent_2801krp7phr1fjat8f1f2yq7mvkt`:
+Every NPC's ElevenLabs agent needs the same set of webhook tools. The server route table in [`apps/party/src/server.ts`](../apps/party/src/server.ts) is the source of truth; this doc mirrors it.
 
-## 1. Enable the "Voice" override (one-time)
+The instructions below are dashboard-specific and need to be repeated for every agent in the roster (one agent per NPC).
 
-Per-character voices (Eve → Sarah, Maria → Alice, Medea → Laura, etc., see
-[`packages/shared/src/npc-roster.ts`](../packages/shared/src/npc-roster.ts)
-`VOICE_BY_CHARACTER`) need the agent to accept a per-session `voiceId`
-override. The toggle is OFF by default, same gotcha as System prompt and
-First message.
+## Prerequisites
+
+- The agent has already been created and its system prompt pasted in. See [`docs/elevenlabs-setup.md`](./elevenlabs-setup.md) for the agent-authoring walkthrough.
+- `ELEVENLABS_AGENT_TOOL_SECRET` is set in `apps/party/.env` (generate with `openssl rand -hex 24`). The same value goes into every tool definition below as `<SECRET>`.
+
+## One-time override toggles (per agent)
+
+Both of these are off by default in the dashboard. Without them, the game's per-session overrides do nothing.
 
 - **Tab:** Security → Overrides
-- **Toggle:** `Voice` (currently off → flip on)
-- Leave Voice speed / stability / similarity off — we don't override those.
-- Click **Publish** at the top right.
+- Flip ON: **First message** (so the game can pick the greeting).
+- Flip ON: **Voice** (so the game can pass a per-character `voiceId`).
+- Leave **Stability**, **Similarity**, **Speed** off — the game doesn't override those.
+- **Publish** at the top right.
 
-After this, the next session start passes the right voiceId per character
-model and you'll hear distinct voices on Eve / Maria / Medea / Matilda /
-Soldier / Bill bodies.
+## One-time dev: tunnel URL
 
-## 2. Registering the 5 webhook tools in ElevenLabs
-
-The Slipstream-NPC agent calls five webhooks during conversations:
-
-| Tool | Effect on the game |
-| --- | --- |
-| `make_friend` | Increments friendship score with the player. Past `SOCIAL.friendThreshold` the player and NPC are mutual friends. |
-| `follow_player` | NPC starts following the player at ~3m. Hostility / engage still wins. |
-| `stop_following` | NPC stops following. |
-| `flee_from` | NPC moves away from the player for `SOCIAL.hostilityMs`. |
-| `drink_coffee` | NPC walks to the free coffee maker and drinks after arrival. |
-
-## One-time dev setup
-
-Each time the cloudflared tunnel restarts, the URL changes. To get a new URL:
+ElevenLabs needs to reach your PartyKit server. For local dev, expose `localhost:1999` via a tunnel:
 
 ```sh
 cloudflared tunnel --url http://localhost:1999
 # wait for "https://<random-words>.trycloudflare.com"
 ```
 
-Replace `https://<TUNNEL_URL>` in the JSON below with that URL.
+Use that URL as `<TUNNEL_URL>` below. Each time you restart cloudflared the URL changes and you have to repaste every tool. For production, replace `<TUNNEL_URL>` with your deployed PartyKit host (e.g. `https://slipstream-rift.<your-username>.partykit.dev`).
 
-The `secret` value is `ELEVENLABS_AGENT_TOOL_SECRET` from `apps/party/.env`.
-
-## How to paste
+## How to add each tool
 
 1. ElevenLabs dashboard → your agent → **Tools** tab → **Add tool** → **Webhook**.
 2. Click **`</> Edit as JSON`** at the bottom-left of the dialog.
-3. Triple-click into the JSON box, **Cmd-A** to select all, **Delete**, then paste the JSON for the tool below.
+3. Triple-click into the JSON box, **Cmd-A** to select all, **Delete**, then paste the JSON for the tool from below.
 4. **Add tool**.
-5. Repeat for each of the 5 tools.
-6. After all 5 are added, click **Publish** at the top.
+5. Repeat for each of the eleven tools.
+6. After all eleven are added, click **Publish** at the top.
 
-## Tool JSON
+> **Before pasting:** replace every `<TUNNEL_URL>` and `<SECRET>` literal in the JSON with your actual values. The dynamic variables `{{npc_id}}`, `{{player_name}}`, `{{session_id}}` are supplied by `ConvAISession` at session start and need no edit.
 
-> Replace `<TUNNEL_URL>` and `<SECRET>` before pasting. The dynamic variables `{{npc_id}}`, `{{player_name}}`, `{{session_id}}` are supplied by `ConvAISession` at session start.
+## Tool catalog
+
+| Tool | What it does in-game |
+| --- | --- |
+| `make_friend` | Increments friendship score with the player. Past `SOCIAL.friendThreshold` the player and NPC are mutual friends. |
+| `follow_player` | NPC starts following the player at ~3m. Hostility / engage still wins. |
+| `stop_following` | NPC stops following. |
+| `flee_from` | NPC moves away from the player for `SOCIAL.hostilityMs`. |
+| `start_attacking` | NPC begins actively shooting at the named target (player name). |
+| `stop_attacking` | NPC stops attacking the named target; falls back to defensive behavior. |
+| `set_pose` | NPC strikes a pose (e.g. `sitting`, `kneeling`, `dancing`). Optional `danceVariant` integer. |
+| `drink_coffee` | NPC walks to the coffee maker (fps_shooter map only) and drinks after arrival. |
+| `patrol` | NPC switches to patrol mode. |
+| `sprint_patrol` | Patrol mode at sprint speed. |
+| `lean_wall` | NPC leans against the nearest wall. |
+
+---
 
 ### make_friend
 
@@ -198,6 +199,115 @@ The `secret` value is `ELEVENLABS_AGENT_TOOL_SECRET` from `apps/party/.env`.
 }
 ```
 
+### start_attacking
+
+```json
+{
+  "type": "webhook",
+  "name": "start_attacking",
+  "description": "Begin actively shooting at a named target. Call this only when the situation has escalated beyond polite withdrawal — your persona feels genuinely threatened by a specific named person, or has decided to defend someone. Pass the target's player name as `targetName`. The NPC's normal hostility / defense logic still runs alongside this directive.",
+  "api_schema": {
+    "url": "<TUNNEL_URL>/parties/main/fps_shooter/tools/start_attacking",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [
+      { "id": "npcId", "type": "string", "description": "NPC id", "value_type": "constant", "constant_value": "{{npc_id}}" },
+      { "id": "playerName", "type": "string", "description": "Calling player name", "value_type": "constant", "constant_value": "{{player_name}}" },
+      { "id": "sessionId", "type": "string", "description": "Voice session id", "value_type": "constant", "constant_value": "{{session_id}}" },
+      { "id": "targetName", "type": "string", "description": "Player to attack", "value_type": "llm_prompt" },
+      { "id": "secret", "type": "string", "description": "Shared secret", "value_type": "constant", "constant_value": "<SECRET>" }
+    ],
+    "request_body_schema": null,
+    "request_headers": [],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "response_timeout_secs": 10,
+  "dynamic_variables": { "dynamic_variable_placeholders": {} },
+  "assignments": [],
+  "disable_interruptions": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "tool_error_handling_mode": "auto",
+  "response_mocks": []
+}
+```
+
+### stop_attacking
+
+```json
+{
+  "type": "webhook",
+  "name": "stop_attacking",
+  "description": "Stop actively shooting at a named target. Call this when the threat has passed, your persona has cooled off, or the target has surrendered. Pass the target name; if omitted, defaults to the player you're currently talking to.",
+  "api_schema": {
+    "url": "<TUNNEL_URL>/parties/main/fps_shooter/tools/stop_attacking",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [
+      { "id": "npcId", "type": "string", "description": "NPC id", "value_type": "constant", "constant_value": "{{npc_id}}" },
+      { "id": "playerName", "type": "string", "description": "Calling player name", "value_type": "constant", "constant_value": "{{player_name}}" },
+      { "id": "sessionId", "type": "string", "description": "Voice session id", "value_type": "constant", "constant_value": "{{session_id}}" },
+      { "id": "targetName", "type": "string", "description": "Player to stop attacking (optional)", "value_type": "llm_prompt" },
+      { "id": "secret", "type": "string", "description": "Shared secret", "value_type": "constant", "constant_value": "<SECRET>" }
+    ],
+    "request_body_schema": null,
+    "request_headers": [],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "response_timeout_secs": 10,
+  "dynamic_variables": { "dynamic_variable_placeholders": {} },
+  "assignments": [],
+  "disable_interruptions": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "tool_error_handling_mode": "auto",
+  "response_mocks": []
+}
+```
+
+### set_pose
+
+```json
+{
+  "type": "webhook",
+  "name": "set_pose",
+  "description": "Strike a physical pose. Valid poses include 'sitting', 'kneeling', 'dancing', 'standing', 'leaning'. Optional `danceVariant` integer picks a specific dance clip if pose is 'dancing'. Call when your persona naturally would (Vex might dance, Rook would not). The pose persists until you set another or the engagement state preempts it.",
+  "api_schema": {
+    "url": "<TUNNEL_URL>/parties/main/fps_shooter/tools/set_pose",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [
+      { "id": "npcId", "type": "string", "description": "NPC id", "value_type": "constant", "constant_value": "{{npc_id}}" },
+      { "id": "playerName", "type": "string", "description": "Player name", "value_type": "constant", "constant_value": "{{player_name}}" },
+      { "id": "sessionId", "type": "string", "description": "Voice session id", "value_type": "constant", "constant_value": "{{session_id}}" },
+      { "id": "pose", "type": "string", "description": "Pose name", "value_type": "llm_prompt" },
+      { "id": "danceVariant", "type": "string", "description": "Dance variant index (optional)", "value_type": "llm_prompt" },
+      { "id": "secret", "type": "string", "description": "Shared secret", "value_type": "constant", "constant_value": "<SECRET>" }
+    ],
+    "request_body_schema": null,
+    "request_headers": [],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "response_timeout_secs": 10,
+  "dynamic_variables": { "dynamic_variable_placeholders": {} },
+  "assignments": [],
+  "disable_interruptions": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "tool_error_handling_mode": "auto",
+  "response_mocks": []
+}
+```
+
 ### drink_coffee
 
 ```json
@@ -233,14 +343,120 @@ The `secret` value is `ELEVENLABS_AGENT_TOOL_SECRET` from `apps/party/.env`.
 }
 ```
 
+### patrol
+
+```json
+{
+  "type": "webhook",
+  "name": "patrol",
+  "description": "Switch to patrol mode — walk a random circuit of the map. Call when your persona is bored, restless, or wants visible activity to break tension. Walking pace.",
+  "api_schema": {
+    "url": "<TUNNEL_URL>/parties/main/fps_shooter/tools/patrol",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [
+      { "id": "npcId", "type": "string", "description": "NPC id", "value_type": "constant", "constant_value": "{{npc_id}}" },
+      { "id": "playerName", "type": "string", "description": "Player name", "value_type": "constant", "constant_value": "{{player_name}}" },
+      { "id": "sessionId", "type": "string", "description": "Voice session id", "value_type": "constant", "constant_value": "{{session_id}}" },
+      { "id": "secret", "type": "string", "description": "Shared secret", "value_type": "constant", "constant_value": "<SECRET>" }
+    ],
+    "request_body_schema": null,
+    "request_headers": [],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "response_timeout_secs": 10,
+  "dynamic_variables": { "dynamic_variable_placeholders": {} },
+  "assignments": [],
+  "disable_interruptions": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "tool_error_handling_mode": "auto",
+  "response_mocks": []
+}
+```
+
+### sprint_patrol
+
+```json
+{
+  "type": "webhook",
+  "name": "sprint_patrol",
+  "description": "Same as patrol, but sprint speed. Call when your persona is amped up, training, or showing off.",
+  "api_schema": {
+    "url": "<TUNNEL_URL>/parties/main/fps_shooter/tools/sprint_patrol",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [
+      { "id": "npcId", "type": "string", "description": "NPC id", "value_type": "constant", "constant_value": "{{npc_id}}" },
+      { "id": "playerName", "type": "string", "description": "Player name", "value_type": "constant", "constant_value": "{{player_name}}" },
+      { "id": "sessionId", "type": "string", "description": "Voice session id", "value_type": "constant", "constant_value": "{{session_id}}" },
+      { "id": "secret", "type": "string", "description": "Shared secret", "value_type": "constant", "constant_value": "<SECRET>" }
+    ],
+    "request_body_schema": null,
+    "request_headers": [],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "response_timeout_secs": 10,
+  "dynamic_variables": { "dynamic_variable_placeholders": {} },
+  "assignments": [],
+  "disable_interruptions": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "tool_error_handling_mode": "auto",
+  "response_mocks": []
+}
+```
+
+### lean_wall
+
+```json
+{
+  "type": "webhook",
+  "name": "lean_wall",
+  "description": "Lean against the nearest wall. Idle stance for personas that would rather hang back than patrol. Call sparingly; pose persists until you set another stance or get engaged.",
+  "api_schema": {
+    "url": "<TUNNEL_URL>/parties/main/fps_shooter/tools/lean_wall",
+    "method": "POST",
+    "path_params_schema": [],
+    "query_params_schema": [
+      { "id": "npcId", "type": "string", "description": "NPC id", "value_type": "constant", "constant_value": "{{npc_id}}" },
+      { "id": "playerName", "type": "string", "description": "Player name", "value_type": "constant", "constant_value": "{{player_name}}" },
+      { "id": "sessionId", "type": "string", "description": "Voice session id", "value_type": "constant", "constant_value": "{{session_id}}" },
+      { "id": "secret", "type": "string", "description": "Shared secret", "value_type": "constant", "constant_value": "<SECRET>" }
+    ],
+    "request_body_schema": null,
+    "request_headers": [],
+    "content_type": "application/json",
+    "auth_connection": null
+  },
+  "response_timeout_secs": 10,
+  "dynamic_variables": { "dynamic_variable_placeholders": {} },
+  "assignments": [],
+  "disable_interruptions": false,
+  "pre_tool_speech": "auto",
+  "tool_call_sound": null,
+  "tool_call_sound_behavior": "auto",
+  "execution_mode": "immediate",
+  "tool_error_handling_mode": "auto",
+  "response_mocks": []
+}
+```
+
 ## Verifying
 
-After adding all five and publishing, check at the terminal:
+After adding all eleven and publishing, smoke-test the secret from your terminal:
 
 ```sh
 curl -i -X POST "<TUNNEL_URL>/parties/main/fps_shooter/tools/make_friend?npcId=mira&playerName=YOUR_NAME&sessionId=test&secret=<SECRET>"
 # Expect HTTP 200 with { "ok": true, ... } OR HTTP 403 "no consent on record" if you haven't joined the room.
-# An HTTP 401 means the secret didn't match — re-check the dashboard tool body.
+# HTTP 401 means the secret didn't match — re-check the tool definition in the dashboard.
+# HTTP 503 means ELEVENLABS_AGENT_TOOL_SECRET is unset on the server — fix apps/party/.env and restart partykit dev.
 ```
 
-In-game test: walk to an NPC, build up some rapport ("we should team up"), then ask "follow me." The agent should call `follow_player` and the NPC literally begins walking after you.
+In-game, walk to an NPC, build rapport ("we should team up"), then say "follow me." The agent should call `follow_player` and you should see a 200 in the PartyKit dev console plus the NPC walking after you in the game.

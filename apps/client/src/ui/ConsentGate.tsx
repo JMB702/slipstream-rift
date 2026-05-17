@@ -43,7 +43,7 @@ export const ConsentGate = ({ onAgree }: Props) => {
       <div style={card}>
         <h1 style={h1}>You are about to talk to AI characters</h1>
         <p style={pStrong}>
-          The NPCs in Slipstream-NPC are not humans. They are AI agents powered by{' '}
+          The NPCs in Slipstream Rift are not humans. They are AI agents powered by{' '}
           <a style={a} href="https://elevenlabs.io" target="_blank" rel="noreferrer">
             ElevenLabs
           </a>
@@ -62,7 +62,7 @@ export const ConsentGate = ({ onAgree }: Props) => {
         <ul style={ul}>
           <li>Your microphone audio is sent in real time to ElevenLabs.</li>
           <li>It is transcribed. Transcripts are stored on the game server so NPCs can remember conversations with you across sessions.</li>
-          <li>Raw audio is not retained by Slipstream-NPC; ElevenLabs and its LLM providers may retain audio and transcripts under their own policies.</li>
+          <li>Raw audio is not retained by Slipstream Rift; ElevenLabs and its LLM providers may retain audio and transcripts under their own policies.</li>
           <li>Voice chat only activates when you walk close to an NPC. There is no recording outside those proximity bubbles.</li>
           <li>You can mute the microphone at any time (M on keyboard, Y on Xbox controller). When muted, your audio is not captured or transmitted.</li>
         </ul>

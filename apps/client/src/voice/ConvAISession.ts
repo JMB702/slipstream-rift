@@ -41,7 +41,11 @@ export class ConvAISession {
     if (this.conversation || this.ended) return;
     this.cb.onStatusChange?.('connecting');
     if (!opts.agentId && !opts.signedUrl) {
-      console.warn(`[voice] no agentId or signedUrl provided for ${this.npc.name}`);
+      console.error(
+        `[voice] ${this.npc.name} has no agentId. Set it in packages/shared/src/npc-roster.ts ` +
+          `after creating the ElevenLabs agent for this NPC. See docs/elevenlabs-setup.md ` +
+          `for the full setup walkthrough.`,
+      );
       this.cb.onStatusChange?.('error');
       return;
     }

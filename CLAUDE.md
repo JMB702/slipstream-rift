@@ -1,11 +1,11 @@
-# Slipstream-NPC — project guide for Claude
+# Slipstream Rift — project guide for Claude
 
-Fork of [Slipstream](https://github.com/JMB702/slipstream). Same engine; different social contract: NPCs are peaceful by default, voiced by ElevenLabs Conversational AI, retaliate only when shot at. Players make friends with NPCs through conversation; NPC friends defend each other.
+3D third-person multiplayer arena. NPCs are peaceful by default, voiced by ElevenLabs Conversational AI, and retaliate only when shot at. Players make friends with NPCs through conversation; NPC friends defend each other. Forked from the combat-only Slipstream prototype.
 
-- **Repo**: https://github.com/JMB702/slipstream-npc
-- **Live game**: TBD (Vercel deploy not yet linked for this fork)
-- **PartyKit prod**: `wss://slipstream-npc.jmb702.partykit.dev` (project not yet deployed)
-- **Upstream (Slipstream)**: https://github.com/JMB702/slipstream — combat-only deathmatch parent project. Most engine docs below are inherited from upstream.
+- **Repo**: https://github.com/JMB702/slipstream-rift
+- **Live game**: TBD
+- **PartyKit prod**: set by the maintainer at deploy time; cloners should expect `slipstream-rift.<your-username>.partykit.dev` after `pnpm deploy:party`.
+- **Internal package name**: `@slipstream-npc/shared` — left unchanged to avoid a destructive workspace rename. Treat it as the historical id of this monorepo; the user-facing project is Slipstream Rift.
 
 ## Stack
 
@@ -159,7 +159,7 @@ pnpm npc:state --clear <npcId>     # wipe persona deltas
 pnpm sync:kb           # upload docs/world-bible.md → ElevenLabs knowledge base, attach to all agents
 ```
 
-`vercel.json` at the repo root pins client builds for Vercel. `VITE_PARTYKIT_HOST` is set as a Vercel project env var (production scope) pointing at `slipstream-npc.jmb702.partykit.dev`. `apps/party/.env` (gitignored) holds `ACCESS_CODE=<4 digits>` for local dev — the `partykit dev` server reads it on startup.
+`vercel.json` at the repo root pins client builds for Vercel. `VITE_PARTYKIT_HOST` is set as a Vercel project env var (production scope) pointing at the deployed PartyKit host (e.g. `slipstream-rift.<your-username>.partykit.dev`). `apps/party/.env` (gitignored; see `apps/party/.env.example` for the schema) holds `ACCESS_CODE=<4 digits>` and the ElevenLabs secrets for local dev — the `partykit dev` server reads it on startup.
 
 ### Deployment (manual; not auto-on-merge)
 

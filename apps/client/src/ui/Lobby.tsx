@@ -72,8 +72,8 @@ export const Lobby = ({ onJoin }: Props) => {
   return (
     <div style={overlay}>
       <div style={panel}>
-        <h1 style={{ margin: 0, fontSize: 36, letterSpacing: 2 }}>SLIPSTREAM</h1>
-        <p style={{ opacity: 0.7, marginTop: 4 }}>3rd-person multiplayer arena</p>
+        <h1 style={{ margin: 0, fontSize: 36, letterSpacing: 2 }}>SLIPSTREAM RIFT</h1>
+        <p style={{ opacity: 0.7, marginTop: 4 }}>3rd-person multiplayer arena with talking NPCs</p>
 
         <label style={label}>
           Name
