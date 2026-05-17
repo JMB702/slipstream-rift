@@ -20,3 +20,5 @@ Characters/
 
 # 3D source assets (RAR/FBX/blend) — kept locally, never committed.
 3D Assets/
+/Maps/
+logs/
